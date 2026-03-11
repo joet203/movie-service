@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv add:*)",
+      "Bash(find ~/.claude -name \"*.md\" \\\\\\( -path \"*/commands/*\" -o -path \"*/skills/*\" \\\\\\) 2>/dev/null | head -30)",
+      "Bash(grep -r \"codex\" ~/.claude/settings* 2>/dev/null)",
+      "Skill(codex:codex)",
+      "Bash(git init:*)"
+    ]
+  }
+}

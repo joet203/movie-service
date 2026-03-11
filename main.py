@@ -41,6 +41,21 @@ async def serve_frontend():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+@app.get("/design")
+async def serve_design():
+    return FileResponse(FRONTEND_DIR / "design.html")
+
+
+@app.get("/interview")
+async def serve_interview():
+    return FileResponse(FRONTEND_DIR / "interview.html")
+
+
+@app.get("/plan")
+async def serve_plan():
+    return FileResponse(FRONTEND_DIR / "plan.html")
+
+
 @app.get("/sample-data")
 async def download_sample_csv():
     if not SAMPLE_CSV.exists():

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interview Prep — Movie Database Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --accent:#1863DC;
+  --accent-light:#e8f0fe;
+  --accent-hover:#1455c0;
+  --accent-subtle:rgba(24,99,220,0.08);
+  --bg:#ffffff;
+  --bg-warm:#fafafa;
+  --bg-section:#f5f6f8;
+  --surface:#ffffff;
+  --border:#e5e7eb;
+  --border-light:#f0f1f3;
+  --text:#111827;
+  --text-secondary:#6b7280;
+  --text-muted:#9ca3af;
+  --success:#059669;
+  --success-bg:#ecfdf5;
+  --error:#dc2626;
+  --error-bg:#fef2f2;
+  --warning:#d97706;
+  --radius:10px;
+  --radius-sm:7px;
+  --radius-lg:14px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+  --shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,0.07),0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.08),0 4px 6px -4px rgba(0,0,0,0.04);
+  --font-display:'Newsreader',Georgia,serif;
+  --font-body:'Outfit',system-ui,sans-serif;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
+
+/* Nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-light);transition:box-shadow .3s}
+nav.scrolled{box-shadow:var(--shadow)}
+.nav-inner{max-width:860px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-size:1.15rem;font-weight:600;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:8px}
+.nav-logo .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.back-link{font-size:.82rem;font-weight:500;color:var(--text-secondary);text-decoration:none;padding:6px 12px;border-radius:6px;transition:all .2s;display:flex;align-items:center;gap:5px}
+.back-link:hover{color:var(--accent);background:var(--accent-subtle)}
+.back-link svg{width:16px;height:16px}
+
+/* Shell */
+.shell{max-width:860px;margin:0 auto;padding:0 28px}
+
+/* Hero */
+.hero{text-align:center;padding:100px 0 24px}
+.hero h1{font-family:var(--font-display);font-size:2.6rem;font-weight:400;letter-spacing:-0.03em;line-height:1.15;color:var(--text);max-width:640px;margin:0 auto}
+.hero h1 em{font-style:italic;color:var(--accent)}
+.hero p{color:var(--text-secondary);font-size:1rem;margin:14px auto 0;max-width:520px}
+
+/* Section headers */
+.section-head{margin-bottom:24px;padding-top:56px}
+.section-head h2{font-family:var(--font-display);font-size:1.75rem;font-weight:500;letter-spacing:-0.02em;color:var(--text);line-height:1.2}
+.section-head p{color:var(--text-secondary);margin-top:6px;font-size:.9rem;max-width:560px}
+.section-tag{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px;display:block}
+
+/* Architecture diagram */
+.diagram-block{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px 32px;margin:32px 0 48px;overflow-x:auto}
+.diagram-block pre{font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:.82rem;line-height:1.8;color:var(--text);white-space:pre;margin:0}
+.diagram-block .arrow{color:var(--accent);font-weight:600}
+.diagram-block .endpoint{color:var(--accent);font-weight:500}
+.diagram-block .comment{color:var(--text-muted)}
+.diagram-label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.diagram-label svg{width:14px;height:14px;color:var(--accent)}
+
+/* Accordion */
+.accordion{margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:box-shadow .2s,border-color .2s}
+.accordion:hover{box-shadow:var(--shadow-sm)}
+.accordion.open{border-color:var(--accent);box-shadow:0 2px 12px rgba(24,99,220,.06)}
+.accordion-trigger{width:100%;text-align:left;background:var(--surface);border:none;padding:20px 24px;font-family:var(--font-display);font-size:1.08rem;font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;transition:background .15s;line-height:1.4}
+.accordion-trigger:hover{background:var(--bg-warm)}
+.accordion-trigger .chevron{width:20px;height:20px;flex-shrink:0;color:var(--text-muted);transition:transform .25s ease,color .2s}
+.accordion.open .accordion-trigger .chevron{transform:rotate(180deg);color:var(--accent)}
+.accordion-trigger .q-num{font-family:var(--font-body);font-size:.7rem;font-weight:600;color:var(--accent);background:var(--accent-light);padding:3px 8px;border-radius:4px;flex-shrink:0;letter-spacing:.04em}
+.accordion-body{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.accordion.open .accordion-body{max-height:2000px}
+.accordion-content{padding:0 24px 24px;border-top:1px solid var(--border-light)}
+.accordion-content p{color:var(--text-secondary);font-size:.9rem;line-height:1.7;margin-top:16px}
+.accordion-content ul,.accordion-content ol{margin:12px 0 0 20px;color:var(--text-secondary);font-size:.9rem;line-height:1.7}
+.accordion-content li{margin-bottom:6px}
+.accordion-content li strong{color:var(--text);font-weight:500}
+.accordion-content code{font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:.82rem;background:var(--bg-section);padding:2px 6px;border-radius:4px;color:var(--accent-hover)}
+
+/* Jargon tooltips */
+.jargon{position:relative;border-bottom:1px dashed var(--accent);cursor:help;color:var(--text);font-weight:500}
+.jargon-def{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:.76rem;font-weight:400;padding:8px 12px;border-radius:var(--radius-sm);white-space:normal;width:280px;line-height:1.5;z-index:50;box-shadow:var(--shadow-lg);pointer-events:none;font-style:normal}
+.jargon-def::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)}
+.jargon:hover .jargon-def{display:block}
+
+/* Inline jargon explanation */
+.jargon-inline{font-style:italic;color:var(--text-muted);font-size:.84rem;font-weight:300}
+
+/* Stat cards */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px}
+@media(max-width:700px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.stat-grid{grid-template-columns:1fr}}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 20px;text-align:center;transition:all .2s}
+.stat-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(24,99,220,.08)}
+.stat-card .stat-val{font-family:var(--font-display);font-size:1.55rem;font-weight:500;color:var(--text)}
+.stat-card .stat-unit{font-size:.82rem;color:var(--text-muted);font-weight:300}
+.stat-card .stat-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500;margin-top:4px}
+.stat-bar-wrap{height:4px;background:var(--bg-section);border-radius:2px;margin-top:10px;overflow:hidden}
+.stat-bar-inner{height:100%;border-radius:2px;background:var(--accent);transition:width 1s ease}
+
+/* Pipeline steps */
+.pipeline{counter-reset:step;margin-top:16px}
+.pipeline-step{display:flex;gap:14px;align-items:flex-start;margin-bottom:12px}
+.pipeline-step::before{counter-increment:step;content:counter(step);flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--accent-light);color:var(--accent);font-size:.75rem;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.pipeline-step p{color:var(--text-secondary);font-size:.88rem;line-height:1.6;margin:0}
+
+/* Trade-off callout */
+.callout{background:var(--bg-section);border-left:3px solid var(--accent);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:14px 18px;margin-top:14px;font-size:.86rem;color:var(--text-secondary);line-height:1.65}
+.callout strong{color:var(--text);font-weight:500}
+
+/* What I'd add list */
+.additions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-top:14px}
+@media(max-width:600px){.additions-grid{grid-template-columns:1fr}}
+.addition-item{display:flex;align-items:center;gap:8px;font-size:.88rem;color:var(--text-secondary);padding:6px 0}
+.addition-item::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}
+
+/* AI tools section */
+.tools-list{margin-top:12px}
+.tools-list li{color:var(--text-secondary);font-size:.88rem;margin-bottom:6px}
+
+/* Footer */
+footer{margin-top:72px;padding:32px 0;border-top:1px solid var(--border-light);text-align:center}
+footer p{font-size:.78rem;color:var(--text-muted)}
+
+/* Responsive */
+@media(max-width:600px){
+  .hero h1{font-size:1.9rem}
+  .accordion-trigger{padding:16px 18px;font-size:.98rem}
+  .accordion-content{padding:0 18px 18px}
+  .diagram-block{padding:18px 16px}
+  .diagram-block pre{font-size:.72rem}
+}
+
+/* Print */
+@media print{
+  nav{display:none}
+  .hero{padding-top:20px}
+  .accordion-body{max-height:none!important}
+  .accordion{border:none;margin-bottom:24px}
+  .accordion-trigger .chevron{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo"><span class="dot"></span> Movie Database</a>
+    <a href="/" class="back-link">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      Back to Dashboard
+    </a>
+  </div>
+</nav>
+
+<div class="shell">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Interview <em>Prep</em></h1>
+    <p>Design decisions, trade-offs, and scaling considerations for the Movie Database Service assessment.</p>
+  </div>
+
+  <!-- Architecture Diagram -->
+  <div class="section-head">
+    <span class="section-tag">Overview</span>
+    <h2>Architecture at a Glance</h2>
+  </div>
+
+  <div class="diagram-block">
+    <div class="diagram-label">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      Request Flow
+    </div>
+<pre><span class="endpoint">Client</span> <span class="arrow">&rarr;</span> <span class="endpoint">POST /datasets</span> <span class="comment">(file upload)</span>
+         <span class="arrow">&rarr;</span> Stream to temp file <span class="comment">(1 MB chunks)</span>
+         <span class="arrow">&rarr;</span> 202 Accepted + task_id
+         <span class="arrow">&rarr;</span> BackgroundTask: DuckDB native read_csv <span class="arrow">&rarr;</span> staging table <span class="arrow">&rarr;</span> atomic swap
+         <span class="arrow">&rarr;</span> SSE events: pending <span class="arrow">&rarr;</span> processing <span class="arrow">&rarr;</span> completed
+
+<span class="endpoint">Client</span> <span class="arrow">&rarr;</span> <span class="endpoint">GET /movies</span>?start_year=X&amp;end_year=Y&amp;genre=Z
+         <span class="arrow">&rarr;</span> DuckDB parameterized query with predicate pushdown
+
+<span class="endpoint">Client</span> <span class="arrow">&rarr;</span> <span class="endpoint">GET /datasets/download</span>
+         <span class="arrow">&rarr;</span> DuckDB COPY TO gzip <span class="arrow">&rarr;</span> stream 64 KB chunks</pre>
+  </div>
+
+  <!-- Q&A Section -->
+  <div class="section-head">
+    <span class="section-tag">Q&amp;A</span>
+    <h2>Anticipated Questions</h2>
+    <p>Click any question to expand the answer.</p>
+  </div>
+
+  <!-- Q1 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q1</span>&ensp; Why DuckDB instead of PostgreSQL / SQLite?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>DuckDB is an embedded <span class="jargon">OLAP engine<span class="jargon-def">A database optimized for analyzing large datasets rather than processing small transactions</span></span> &mdash; optimized for scanning and filtering large datasets, not transactional workloads. Key advantages:</p>
+        <ul>
+          <li><strong><span class="jargon">Out-of-core<span class="jargon-def">Can process data larger than available RAM by spilling to disk</span></span>:</strong> Spills to disk when data exceeds RAM. Handles datasets far larger than memory.</li>
+          <li><strong>Columnar storage:</strong> Filter predicates are pushed down to the scan layer <span class="jargon-inline">(filters are applied at the data-reading level so unnecessary data is never loaded)</span>. Only relevant columns are read.</li>
+          <li><strong>Native CSV read:</strong> <code>read_csv</code> parses CSV in C++, orders of magnitude faster than Python-side parsing.</li>
+          <li><strong>No server:</strong> Runs in-process, zero configuration.</li>
+        </ul>
+        <p>SQLite is row-oriented (OLTP) &mdash; great for transactions, poor for analytical scans. PostgreSQL would work but adds operational complexity for a service that runs on a single machine.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q2 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q2</span>&ensp; Walk me through the ingestion pipeline.</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <div class="pipeline">
+          <div class="pipeline-step"><p>Upload streams to a temp file in 1 MB chunks <span class="jargon-inline">(never holds full CSV in memory)</span>.</p></div>
+          <div class="pipeline-step"><p>Header validation via <code>csv.reader</code> <span class="jargon-inline">(just reads first line)</span>.</p></div>
+          <div class="pipeline-step"><p>DuckDB's <code>read_csv</code> ingests the file natively &mdash; <span class="jargon"><code>TRY_CAST</code><span class="jargon-def">Attempts type conversion, returns NULL instead of failing on bad data</span></span> handles dirty data (non-numeric years, etc.).</p></div>
+          <div class="pipeline-step"><p>Data goes into <code>movies_staging</code> table.</p></div>
+          <div class="pipeline-step"><p>Atomic swap: <code>BEGIN; DROP movies; RENAME staging &rarr; movies; COMMIT;</code></p></div>
+          <div class="pipeline-step"><p>Temp file deleted.</p></div>
+        </div>
+        <div class="callout">
+          <strong>Safety net:</strong> If ingestion fails at any point, the staging table is dropped and the original <code>movies</code> table is untouched.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q3 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q3</span>&ensp; Why not use pandas or Polars?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>Deliberate restraint. The task is CSV &rarr; database &rarr; query. Adding a 200+ MB dependency for something DuckDB handles natively would be over-engineering. Python's <code>csv.reader</code> is used only for header validation (one line). DuckDB does the heavy lifting.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q4 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q4</span>&ensp; Your initial implementation was 92s. How did you optimize to 0.5s?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>The first version used Python's <code>csv.reader</code> to iterate row-by-row, parse types manually, accumulate 50K-row batches, and call <span class="jargon"><code>executemany</code><span class="jargon-def">A database method that runs the same SQL statement repeatedly with different values, batching the work</span></span>. This round-trips every row through Python.</p>
+        <p>The optimized version uses DuckDB's <code>read_csv</code> &mdash; the CSV is parsed in DuckDB's C++ engine, never touching Python. <code>TRY_CAST</code> replaces manual type parsing. Same correctness, <strong>170x faster</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q5 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q5</span>&ensp; How does the progress tracking work?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>The upload endpoint returns <code>202 Accepted</code> with a <code>task_id</code>. Progress is tracked in a Python dict <span class="jargon-inline">(<span class="jargon">GIL-safe<span class="jargon-def">Python's threading model guarantees simple operations like updating a dictionary won't cause data corruption</span></span> for single-process)</span>. The <span class="jargon">SSE<span class="jargon-def">Server-Sent Events &mdash; a standard HTTP mechanism for the server to push updates to the browser</span></span> endpoint (<code>/tasks/{id}/events</code>) polls this dict and emits events when state changes.</p>
+        <p>With the DuckDB native reader, ingestion is sub-second for the test dataset, so progress goes 0 &rarr; 100 almost instantly. For truly massive files (GB+), the DuckDB operation would take longer and the SSE mechanism still reports the transition. In a production system with longer ingestion, you'd add more granular progress hooks.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q6 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q6</span>&ensp; What about concurrent uploads?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>DuckDB is <span class="jargon">single-writer<span class="jargon-def">Only one process can write to the database at a time; concurrent writes will block or fail</span></span>. If two uploads arrive simultaneously, the second would fail to acquire the write lock. In production:</p>
+        <ul>
+          <li>Use a task queue (<span class="jargon">Celery/Dramatiq<span class="jargon-def">Python libraries for running background jobs across multiple workers, typically paired with a message broker like Redis</span></span>) to serialize ingestion jobs</li>
+          <li>Return <code>409 Conflict</code> if an ingestion is already in progress</li>
+          <li>Or queue uploads and process sequentially</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q7 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q7</span>&ensp; The in-memory task dict doesn't survive restarts.</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>Correct. This is a conscious trade-off for a single-process take-home. In production:</p>
+        <ul>
+          <li>Task state &rarr; <span class="jargon">Redis<span class="jargon-def">An in-memory data store commonly used for caching, session storage, and job queues</span></span> or database-backed store</li>
+          <li>Job execution &rarr; Celery/Dramatiq with a message broker</li>
+          <li>Horizontal scaling &rarr; multiple workers sharing external state</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q8 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q8</span>&ensp; How would you scale this to 100M+ rows?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>DuckDB handles this out of the box &mdash; out-of-core processing spills to disk. But the API layer would need changes:</p>
+        <ul>
+          <li><strong>Pagination:</strong> Already implemented with <code>limit</code>/<code>offset</code> params and <code>X-Total-Count</code> header. For cursor-based pagination at extreme scale, switch to <span class="jargon">keyset pagination<span class="jargon-def">A more efficient way to page through large datasets using the last seen value instead of counting rows to skip</span></span>.</li>
+          <li><strong>Streaming responses:</strong> For very large result sets, stream JSON lines instead of building a full list.</li>
+          <li><strong>Ingestion:</strong> DuckDB's <code>read_csv</code> scales linearly. Even at 100M rows it would be minutes, not hours.</li>
+          <li><strong>Download:</strong> Already streaming &mdash; no memory concerns.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q9 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q9</span>&ensp; Why SSE instead of WebSockets?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>Progress reporting is unidirectional (server &rarr; client). SSE is simpler:</p>
+        <ul>
+          <li>No upgrade handshake</li>
+          <li>Standard HTTP</li>
+          <li>Native browser support via <span class="jargon"><code>EventSource</code> API<span class="jargon-def">A built-in browser feature for receiving server-pushed updates over a persistent HTTP connection</span></span></li>
+          <li>Auto-reconnection built in</li>
+        </ul>
+        <p>WebSockets would be overkill for one-way status updates.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q10 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q10</span>&ensp; Why <code>ILIKE '%Action%'</code> instead of normalizing genres?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>DuckDB is an OLAP engine where denormalized data is idiomatic. <span class="jargon"><code>ILIKE</code><span class="jargon-def">Case-insensitive pattern matching in SQL &mdash; like LIKE but ignores uppercase/lowercase differences</span></span> (case-insensitive) is pushed down to the scan layer and runs in C++. A <span class="jargon">junction table<span class="jargon-def">A separate table that maps relationships (e.g., movies-to-genres), common in normalized relational databases</span></span> would add join complexity with no performance benefit &mdash; the filtered query returns 8,377 rows in <strong>0.03s</strong>.</p>
+        <div class="callout">
+          <strong>Trade-off:</strong> Substring matching could produce false positives (<code>"Drama"</code> matching <code>"Melodrama"</code>), but the dataset's genre vocabulary doesn't have such conflicts. If it did, you'd split on commas and use <code>list_contains</code>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q11 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q11</span>&ensp; How did you handle dirty data in the CSV?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>The CSV has entries like <code>"III"</code> in the year column and irregular quoting (<code>"""Giliap"""</code>). DuckDB's <span class="jargon"><code>TRY_CAST</code><span class="jargon-def">Attempts type conversion, returns NULL instead of crashing on bad data</span></span> converts unparseable values to <code>NULL</code> instead of failing. <code>strict_mode=false</code> tolerates quoting issues. This matches the behavior of the original Python-side parsing (which had try/except blocks) but runs in C++.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q12 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q12</span>&ensp; What would you add with more time?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <div class="additions-grid">
+          <div class="addition-item">Pagination on the query endpoint</div>
+          <div class="addition-item">Input validation on genre (whitelist)</div>
+          <div class="addition-item">Rate limiting on upload endpoint</div>
+          <div class="addition-item">Persistent task state (Redis)</div>
+          <div class="addition-item">OpenTelemetry instrumentation</div>
+          <div class="addition-item">CI/CD pipeline with tests</div>
+          <div class="addition-item">Docker containerization</div>
+          <div class="addition-item">API versioning</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q13 -->
+  <div class="accordion" data-accordion>
+    <button class="accordion-trigger" aria-expanded="false">
+      <span><span class="q-num">Q13</span>&ensp; How did you use AI tools?</span>
+      <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="accordion-body">
+      <div class="accordion-content">
+        <p>Claude Code (CLI) was the primary tool. Used it for:</p>
+        <ul class="tools-list">
+          <li>Architecture planning <span class="jargon-inline">(interactive Q&amp;A before writing code)</span></li>
+          <li>Implementation <span class="jargon-inline">(generated code with review at each step)</span></li>
+          <li>Debugging <span class="jargon-inline">(DuckDB API changes, test fixture ordering)</span></li>
+          <li>Optimization <span class="jargon-inline">(identified DuckDB native CSV reader opportunity)</span></li>
+          <li>Documentation <span class="jargon-inline">(DESIGN.md, this interview prep)</span></li>
+        </ul>
+        <p>All AI workfiles (<code>plan.md</code>, <code>plan.html</code>) are included in the submission.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Numbers -->
+  <div class="section-head" style="padding-top:64px">
+    <span class="section-tag">Benchmarks</span>
+    <h2>Key Numbers</h2>
+    <p>Performance metrics from the 367K-row test dataset.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-val">367,314</div>
+      <div class="stat-label">CSV rows</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:100%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">15.8 <span class="stat-unit">MB</span></div>
+      <div class="stat-label">CSV size</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:16%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">0.52<span class="stat-unit">s</span></div>
+      <div class="stat-label">Upload + ingest</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:63%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">0.03<span class="stat-unit">s</span></div>
+      <div class="stat-label">Filtered query</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:4%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">0.83<span class="stat-unit">s</span></div>
+      <div class="stat-label">Full query (367K rows)</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:100%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">0.49<span class="stat-unit">s</span></div>
+      <div class="stat-label">Download (gzip)</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:59%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">~85 <span class="stat-unit">MB</span></div>
+      <div class="stat-label">Server idle RSS</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:8.5%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">15 <span class="stat-unit">tests</span></div>
+      <div class="stat-label">Test suite &middot; 0.17s</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:100%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">2</div>
+      <div class="stat-label">Dependencies</div>
+      <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:10%"></div></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Movie Database Service &mdash; Senior SWE Assessment Submission</p>
+  </footer>
+
+</div>
+
+<script>
+// Nav scroll shadow
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 10);
+}, { passive: true });
+
+// Accordion toggle
+document.querySelectorAll('[data-accordion]').forEach(acc => {
+  const trigger = acc.querySelector('.accordion-trigger');
+  trigger.addEventListener('click', () => {
+    const isOpen = acc.classList.contains('open');
+    acc.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', !isOpen);
+  });
+});
+
+// Open first accordion by default
+const first = document.querySelector('[data-accordion]');
+if (first) {
+  first.classList.add('open');
+  first.querySelector('.accordion-trigger').setAttribute('aria-expanded', 'true');
+}
+
+// Animate stat bars on scroll
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.querySelectorAll('.stat-bar-inner').forEach(bar => {
+        const w = bar.style.width;
+        bar.style.width = '0';
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { bar.style.width = w; });
+        });
+      });
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.2 });
+document.querySelectorAll('.stat-grid').forEach(g => observer.observe(g));
+</script>
+</body>
+</html>

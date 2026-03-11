@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Choices - Movie Database Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --accent:#1863DC;
+  --accent-light:#e8f0fe;
+  --accent-hover:#1455c0;
+  --accent-subtle:rgba(24,99,220,0.08);
+  --bg:#ffffff;
+  --bg-warm:#fafafa;
+  --bg-section:#f5f6f8;
+  --surface:#ffffff;
+  --border:#e5e7eb;
+  --border-light:#f0f1f3;
+  --text:#111827;
+  --text-secondary:#6b7280;
+  --text-muted:#9ca3af;
+  --success:#059669;
+  --success-bg:#ecfdf5;
+  --error:#dc2626;
+  --error-bg:#fef2f2;
+  --warning:#d97706;
+  --radius:10px;
+  --radius-sm:7px;
+  --radius-lg:14px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+  --shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,0.07),0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.08),0 4px 6px -4px rgba(0,0,0,0.04);
+  --font-display:'Newsreader',Georgia,serif;
+  --font-body:'Outfit',system-ui,sans-serif;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
+
+/* ═══ NAV ═══ */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-light);transition:box-shadow .3s}
+nav.scrolled{box-shadow:var(--shadow)}
+.nav-inner{max-width:820px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-size:1.15rem;font-weight:600;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:8px}
+.nav-logo .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.nav-back{font-size:.82rem;font-weight:500;color:var(--text-secondary);text-decoration:none;padding:6px 14px;border-radius:6px;transition:all .2s;display:flex;align-items:center;gap:6px}
+.nav-back:hover{color:var(--accent);background:var(--accent-subtle)}
+.nav-back svg{width:15px;height:15px}
+
+/* ═══ SHELL ═══ */
+.shell{max-width:820px;margin:0 auto;padding:0 28px}
+
+/* ═══ HERO ═══ */
+.hero{text-align:center;padding:110px 0 48px}
+.hero h1{font-family:var(--font-display);font-size:2.8rem;font-weight:400;letter-spacing:-0.03em;line-height:1.15;color:var(--text);margin:0 auto}
+.hero h1 em{font-style:italic;color:var(--accent)}
+.hero p{color:var(--text-secondary);font-size:1rem;margin:14px auto 0;max-width:560px;line-height:1.7}
+
+/* ═══ TOC ═══ */
+.toc{margin:0 0 48px;padding:24px 28px;background:var(--bg-warm);border:1px solid var(--border-light);border-radius:var(--radius-lg)}
+.toc-title{font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px}
+.toc-list{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:6px 32px}
+@media(max-width:600px){.toc-list{grid-template-columns:1fr}}
+.toc-list a{font-size:.88rem;color:var(--text-secondary);text-decoration:none;padding:4px 0;display:flex;align-items:center;gap:8px;transition:color .15s}
+.toc-list a:hover{color:var(--accent)}
+.toc-list a::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .15s}
+.toc-list a:hover::before{background:var(--accent)}
+
+/* ═══ SECTIONS ═══ */
+.doc-section{margin-bottom:48px}
+.section-tag{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px;display:block}
+.doc-section h2{font-family:var(--font-display);font-size:1.7rem;font-weight:500;letter-spacing:-0.02em;color:var(--text);line-height:1.2;margin-bottom:16px;padding-top:24px}
+.doc-section h3{font-family:var(--font-display);font-size:1.2rem;font-weight:500;color:var(--text);margin:28px 0 12px;letter-spacing:-0.01em}
+.doc-section p{color:var(--text-secondary);font-size:.92rem;line-height:1.75;margin-bottom:14px}
+.doc-section ul,.doc-section ol{margin:0 0 16px 0;padding-left:0;list-style:none}
+.doc-section li{color:var(--text-secondary);font-size:.92rem;line-height:1.7;padding:6px 0 6px 22px;position:relative}
+.doc-section li::before{content:'';position:absolute;left:4px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--accent-light);border:1.5px solid var(--accent)}
+
+/* ═══ JARGON EXPLAINER ═══ */
+.jargon{display:inline;position:relative}
+.jargon-term{color:var(--accent);font-weight:500;cursor:help;border-bottom:1px dashed var(--accent);white-space:nowrap}
+.jargon-explain{display:block;margin-top:4px;padding:8px 14px;background:var(--bg-warm);border-left:3px solid var(--accent-light);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:.83rem;color:var(--text-muted);font-style:italic;line-height:1.6}
+
+/* ═══ CODE ═══ */
+code{font-family:'SF Mono',Monaco,Consolas,monospace;font-size:.82em;background:var(--accent-subtle);color:var(--accent);padding:2px 7px;border-radius:4px}
+pre{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:12px 0 16px;font-size:.82rem;line-height:1.6}
+pre code{background:none;padding:0;color:var(--text-secondary)}
+
+/* ═══ COLLAPSIBLE ═══ */
+.collapsible{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden;transition:box-shadow .2s}
+.collapsible:hover{box-shadow:var(--shadow-sm)}
+.collapsible-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;cursor:pointer;user-select:none;transition:background .15s}
+.collapsible-header:hover{background:var(--bg-warm)}
+.collapsible-header h3{font-family:var(--font-display);font-size:1.1rem;font-weight:500;color:var(--text);margin:0;display:flex;align-items:center;gap:10px}
+.collapsible-header .icon{width:32px;height:32px;border-radius:8px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.collapsible-header .icon svg{width:16px;height:16px;color:var(--accent)}
+.collapsible-chevron{width:20px;height:20px;color:var(--text-muted);transition:transform .3s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.collapsible.open .collapsible-chevron{transform:rotate(180deg)}
+.collapsible-body{max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(.4,0,.2,1)}
+.collapsible.open .collapsible-body{max-height:2000px}
+.collapsible-content{padding:0 22px 22px}
+.collapsible-content p{color:var(--text-secondary);font-size:.9rem;line-height:1.75;margin-bottom:12px}
+.collapsible-content ul{margin:0 0 12px 0;padding-left:0;list-style:none}
+.collapsible-content li{color:var(--text-secondary);font-size:.9rem;line-height:1.7;padding:5px 0 5px 22px;position:relative}
+.collapsible-content li::before{content:'';position:absolute;left:4px;top:13px;width:6px;height:6px;border-radius:50%;background:var(--accent-light);border:1.5px solid var(--accent)}
+.collapsible-content code{font-size:.8em}
+
+/* ═══ HIGHLIGHT CARD ═══ */
+.highlight-card{background:var(--accent-subtle);border:1px solid rgba(24,99,220,0.12);border-radius:var(--radius);padding:20px 22px;margin:16px 0}
+.highlight-card p{color:var(--text);font-size:.9rem;margin:0}
+.highlight-card strong{color:var(--accent)}
+
+/* ═══ COMPARISON ═══ */
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+@media(max-width:600px){.comparison{grid-template-columns:1fr}}
+.comparison-card{padding:18px 20px;border-radius:var(--radius);border:1px solid var(--border)}
+.comparison-card.before{background:var(--error-bg);border-color:#fecaca}
+.comparison-card.after{background:var(--success-bg);border-color:#bbf7d0}
+.comparison-label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.comparison-card.before .comparison-label{color:var(--error)}
+.comparison-card.after .comparison-label{color:var(--success)}
+.comparison-val{font-family:var(--font-display);font-size:1.8rem;font-weight:500;color:var(--text)}
+.comparison-desc{font-size:.82rem;color:var(--text-secondary);margin-top:4px}
+
+/* ═══ STAT CARDS (benchmarks) ═══ */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0}
+@media(max-width:768px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.stat-grid{grid-template-columns:1fr}}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;transition:all .2s}
+.stat-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(24,99,220,.08)}
+.stat-card .stat-val{font-family:var(--font-display);font-size:1.6rem;font-weight:500;color:var(--text)}
+.stat-card .stat-unit{font-size:.85rem;color:var(--text-muted);font-weight:300}
+.stat-card .stat-label{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500;margin-top:4px}
+.stat-card .stat-note{font-size:.76rem;color:var(--text-muted);margin-top:8px;font-style:italic;line-height:1.4}
+.stat-bar-wrap{height:4px;background:var(--bg-section);border-radius:2px;margin-top:10px;overflow:hidden}
+.stat-bar-inner{height:100%;border-radius:2px;background:var(--accent);transition:width 1s ease}
+
+/* ═══ MEMORY STAT ═══ */
+.memory-stat{background:var(--bg-warm);border:1px solid var(--border-light);border-radius:var(--radius);padding:18px 22px;margin-top:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.memory-stat .mem-label{font-size:.82rem;color:var(--text-muted);font-weight:500}
+.memory-stat .mem-bar{flex:1;min-width:200px;height:8px;background:var(--bg-section);border-radius:4px;overflow:hidden;position:relative}
+.memory-stat .mem-bar-idle{position:absolute;left:0;top:0;height:100%;background:var(--accent-light);border-radius:4px}
+.memory-stat .mem-bar-peak{position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:4px}
+.memory-stat .mem-values{font-size:.8rem;color:var(--text-secondary);display:flex;gap:16px}
+.memory-stat .mem-values span{white-space:nowrap}
+
+/* ═══ BENCHMARK ENV ═══ */
+.bench-env{font-size:.82rem;color:var(--text-muted);text-align:center;margin-bottom:20px;font-style:italic}
+
+/* ═══ FLOW STEPS ═══ */
+.flow-steps{display:flex;flex-direction:column;gap:0;margin:16px 0}
+.flow-step{display:flex;gap:14px;position:relative}
+.flow-step:not(:last-child){padding-bottom:12px}
+.flow-step:not(:last-child)::before{content:'';position:absolute;left:14px;top:30px;bottom:0;width:2px;background:var(--accent-light)}
+.flow-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:.75rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:1}
+.flow-text{font-size:.88rem;color:var(--text-secondary);line-height:1.6;padding-top:3px}
+.flow-text code{font-size:.78em}
+
+/* ═══ TRADE-OFF NOTE ═══ */
+.tradeoff{background:var(--bg-warm);border:1px solid var(--border-light);border-radius:var(--radius);padding:14px 18px;margin:12px 0;font-size:.86rem;color:var(--text-secondary);line-height:1.6}
+.tradeoff strong{color:var(--warning);font-weight:600}
+.tradeoff::before{content:'Trade-off: ';font-weight:600;color:var(--warning)}
+
+/* ═══ DIVIDER ═══ */
+.divider{border:none;border-top:1px solid var(--border-light);margin:48px 0}
+
+/* ═══ FOOTER ═══ */
+.doc-footer{text-align:center;padding:40px 0 60px;color:var(--text-muted);font-size:.82rem}
+.doc-footer a{color:var(--accent);text-decoration:none}
+.doc-footer a:hover{text-decoration:underline}
+
+/* ═══ ANIMATION ═══ */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .5s ease both}
+.fade-up:nth-child(2){animation-delay:.05s}
+.fade-up:nth-child(3){animation-delay:.1s}
+.fade-up:nth-child(4){animation-delay:.15s}
+.fade-up:nth-child(5){animation-delay:.2s}
+
+/* ═══ PRINT ═══ */
+@media print{
+  nav{display:none}
+  .hero{padding-top:20px}
+  .collapsible-body{max-height:none!important}
+  .collapsible-chevron{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo"><span class="dot"></span>Movie DB</a>
+    <a href="/" class="nav-back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      Back to Dashboard
+    </a>
+  </div>
+</nav>
+
+<div class="shell">
+
+  <!-- Hero -->
+  <div class="hero fade-up">
+    <h1>Design <em>Choices</em></h1>
+    <p>Architecture decisions behind the Movie Database Service: why each approach was chosen, what trade-offs were made, and how it would evolve at scale.</p>
+  </div>
+
+  <!-- Table of Contents -->
+  <div class="toc fade-up">
+    <div class="toc-title">Contents</div>
+    <ul class="toc-list">
+      <li><a href="#overview">Architecture Overview</a></li>
+      <li><a href="#duckdb">Why DuckDB?</a></li>
+      <li><a href="#ingestion">CSV Ingestion Strategy</a></li>
+      <li><a href="#memory">Memory Management</a></li>
+      <li><a href="#background-tasks">Background Tasks + SSE</a></li>
+      <li><a href="#atomic">Atomic Data Replacement</a></li>
+      <li><a href="#sse-vs-ws">SSE over WebSockets</a></li>
+      <li><a href="#year-range">Year vs Date Range</a></li>
+      <li><a href="#genre">Genre Filtering Strategy</a></li>
+      <li><a href="#task-state">Task State: In-Memory Dict</a></li>
+      <li><a href="#benchmarks">Benchmarks</a></li>
+    </ul>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- OVERVIEW -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="overview">
+    <span class="section-tag">Architecture</span>
+    <h2>Overview</h2>
+    <p>
+      Uploads are streamed to disk in chunks to avoid buffering the full file in application memory.
+      Querying and storage are handled with <span class="jargon"><span class="jargon-term">DuckDB</span></span>
+      because it supports efficient analytical filtering on
+      <span class="jargon"><span class="jargon-term">columnar data</span></span>
+      and can operate
+      <span class="jargon"><span class="jargon-term">out-of-core</span></span>
+      on datasets larger than available RAM.
+    </p>
+    <span class="jargon-explain">Columnar storage means data is stored by column rather than by row, which is dramatically faster when a query only needs certain fields. Out-of-core processing means the database can handle data bigger than your computer's RAM by temporarily spilling to disk.</span>
+
+    <p>
+      Long-running ingestion is decoupled from the request/response cycle using background task execution plus in-memory task status tracking. The endpoint returns <code>202 Accepted</code> immediately with a task ID. Progress updates are exposed via
+      <span class="jargon"><span class="jargon-term">Server-Sent Events (SSE)</span></span>.
+    </p>
+    <span class="jargon-explain">SSE is a way for the server to push real-time updates to the browser over a standard HTTP connection. Unlike WebSockets, it's one-directional (server to client) and requires no special handshake.</span>
+
+    <p>
+      Data replacement uses a
+      <span class="jargon"><span class="jargon-term">staging table</span></span>
+      pattern &mdash; new data is ingested into <code>movies_staging</code>, then atomically swapped into <code>movies</code> via a transaction. This ensures queries always see a complete dataset, never partial ingestion state.
+    </p>
+    <span class="jargon-explain">A staging table is a temporary holding area for new data. By loading data there first, the live table is never in an incomplete state. Once the staging table is ready, it replaces the live table in a single atomic operation.</span>
+
+    <p>
+      Large downloads are returned with <code>StreamingResponse</code> over a DuckDB-generated gzip file, so the response is streamed incrementally in 64 KB chunks rather than materialized in memory.
+    </p>
+
+    <div class="highlight-card">
+      <p>
+        <strong>Production note:</strong> For this take-home, in-process task state (a Python dict) was chosen for simplicity.
+        In production, job execution and status state would be externalized (e.g., Redis, a task queue) to support horizontal scaling and persistence across restarts.
+      </p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- WHY DUCKDB -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="duckdb">
+    <span class="section-tag">Database</span>
+    <h2>Why DuckDB?</h2>
+    <p>
+      DuckDB is an embedded
+      <span class="jargon"><span class="jargon-term">OLAP</span></span>
+      database that runs in-process &mdash; no separate server needed. Unlike transactional databases (PostgreSQL, MySQL) which are optimized for many small reads and writes, OLAP engines are designed for scanning and filtering large volumes of data efficiently.
+    </p>
+    <span class="jargon-explain">OLAP stands for Online Analytical Processing. It's a category of database optimized for reading and analyzing large amounts of data (aggregations, filters, scans), rather than for frequent small updates like inserting one row at a time.</span>
+  </div>
+
+  <!-- DuckDB Feature Collapsibles -->
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+        Out-of-Core Processing
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>Automatically spills to disk when data exceeds available RAM. Handles datasets far larger than memory without any configuration.</p>
+        <span class="jargon-explain">This means the database can process a 50 GB file on a machine with only 8 GB of RAM. It keeps active data in memory but transparently pages the rest to temporary files on disk.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>
+        Columnar Storage
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>Analytical queries (filters, scans) are inherently faster with columnar layout. DuckDB pushes
+          <span class="jargon"><span class="jargon-term">filter predicates</span></span>
+          down to the scan layer.
+        </p>
+        <span class="jargon-explain">Predicate pushdown means the database applies your WHERE filters at the lowest level of data reading, so it never loads rows it doesn't need. Instead of reading all 367K rows and then filtering, it skips irrelevant data blocks entirely.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        ACID Transactions
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>Enables the atomic staging table swap during ingestion &mdash; queries never see partial data.</p>
+        <span class="jargon-explain">ACID (Atomicity, Consistency, Isolation, Durability) guarantees that data operations are all-or-nothing. If the swap fails halfway through, the database rolls back to the previous state automatically, preventing partial or corrupt data.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+        Native Gzip Export
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p><code>COPY ... TO ... COMPRESSION 'gzip'</code> handles CSV formatting and compression in a single C++ pass &mdash; no Python-side serialization or compression overhead.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- INGESTION -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="ingestion">
+    <span class="section-tag">Performance</span>
+    <h2>CSV Ingestion Strategy</h2>
+    <p>
+      CSV ingestion uses DuckDB's built-in <code>read_csv</code> function rather than Python-side parsing. This was an intentional optimization &mdash; an initial implementation using Python's <code>csv.reader</code> with <code>executemany</code> batching was dramatically slower.
+    </p>
+
+    <!-- Before/After comparison -->
+    <div class="comparison">
+      <div class="comparison-card before">
+        <div class="comparison-label">Before: Python csv.reader</div>
+        <div class="comparison-val">92<span style="font-size:.9rem;font-weight:300;color:var(--text-muted)">s</span></div>
+        <div class="comparison-desc">Row-by-row Python parsing with executemany batching</div>
+      </div>
+      <div class="comparison-card after">
+        <div class="comparison-label">After: DuckDB read_csv</div>
+        <div class="comparison-val">0.5<span style="font-size:.9rem;font-weight:300;color:var(--text-muted)">s</span></div>
+        <div class="comparison-desc">Native C++ CSV reader &mdash; <strong>170x faster</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+        How It Works
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <ul>
+          <li>
+            <strong><code>TRY_CAST</code></strong> handles dirty data gracefully &mdash; e.g., <code>"III"</code> in the year column becomes <code>NULL</code> instead of failing.
+            <span class="jargon-explain">TRY_CAST attempts to convert data to a specific type (like text to integer), returning NULL instead of throwing an error if the conversion fails. This prevents a single bad row from crashing the entire import.</span>
+          </li>
+          <li>
+            <strong><code>strict_mode=false</code></strong> tolerates quoting irregularities in the CSV.
+            <span class="jargon-explain">This tells DuckDB to be lenient with formatting issues in the CSV (like mismatched quotes or inconsistent escaping) rather than rejecting the file entirely.</span>
+          </li>
+          <li>
+            Header validation is still performed via a quick <code>csv.reader</code> first-line check before DuckDB ingests.
+          </li>
+          <li>
+            The staging table pattern is preserved for atomic replacement.
+          </li>
+        </ul>
+        <p style="margin-top:8px;font-style:italic;color:var(--text-muted)">
+          Python's <code>csv.reader</code> is still used for header validation &mdash; stdlib for correctness, DuckDB for performance.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- MEMORY -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="memory">
+    <span class="section-tag">Efficiency</span>
+    <h2>Memory Management</h2>
+    <p>Every operation avoids loading full datasets into application memory:</p>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+        Upload
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p><code>UploadFile</code> streamed to a temp file in <strong>1 MB chunks</strong>. The entire CSV never lives in Python memory at once.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
+        Ingestion
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>DuckDB reads the CSV directly from disk in its C++ engine. <strong>No Python-side row iteration</strong> means no per-row object allocation overhead.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        Query
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>DuckDB pushes <code>WHERE</code> filters to the scan layer via
+          <span class="jargon"><span class="jargon-term">predicate pushdown</span></span>.
+          Only matching rows are materialized into Python objects.
+        </p>
+        <span class="jargon-explain">Predicate pushdown means the database applies your filters at the lowest level of data reading, so it never loads data it doesn't need. For a query returning 8K rows out of 367K, only those 8K rows cross the C++/Python boundary.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible open" data-collapsible>
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        Download
+      </h3>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>DuckDB writes a gzip-compressed CSV to a temp file natively. The file is streamed to the client in <strong>64 KB chunks</strong>, then deleted. At no point is the full CSV held in Python memory.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- BACKGROUND TASKS -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="background-tasks">
+    <span class="section-tag">Concurrency</span>
+    <h2>Background Tasks + SSE</h2>
+    <p>
+      CSV ingestion runs as a <code>BackgroundTasks</code> function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free. The
+      <span class="jargon"><span class="jargon-term">SSE</span></span>
+      endpoint polls task state and emits events when status changes.
+    </p>
+    <span class="jargon-explain">SSE (Server-Sent Events) is a built-in browser API where the server pushes updates to the client over a single HTTP connection. The browser's EventSource object handles reconnection automatically.</span>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ATOMIC REPLACEMENT -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="atomic">
+    <span class="section-tag">Data Integrity</span>
+    <h2>Atomic Data Replacement</h2>
+    <p>Each upload replaces the entire dataset atomically using a staging table:</p>
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-text">Ingest CSV into <code>movies_staging</code></div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-text"><code>BEGIN TRANSACTION</code></div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-text"><code>DROP TABLE IF EXISTS movies</code></div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-text"><code>ALTER TABLE movies_staging RENAME TO movies</code></div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div class="flow-text"><code>COMMIT</code></div>
+      </div>
+    </div>
+
+    <p>Queries always see either the complete old dataset or the complete new one. If ingestion fails, the staging table is dropped and the original <code>movies</code> table is preserved.</p>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- SSE vs WebSockets -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="sse-vs-ws">
+    <span class="section-tag">Real-Time</span>
+    <h2>SSE over WebSockets</h2>
+    <p>
+      <span class="jargon"><span class="jargon-term">Server-Sent Events</span></span>
+      was chosen over WebSockets because progress reporting is unidirectional (server to client). SSE uses standard HTTP with no upgrade handshake, and has native browser support via the <code>EventSource</code> API.
+    </p>
+    <span class="jargon-explain">WebSockets create a two-way communication channel and require a protocol upgrade handshake. Since we only need to send updates from the server to the browser (not the other way around), SSE is simpler, lighter, and has better compatibility with proxies and load balancers.</span>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- YEAR RANGE -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="year-range">
+    <span class="section-tag">API Design</span>
+    <h2>Year vs Date Range</h2>
+    <p>
+      The CSV data only contains a <code>year</code> column, not a full date. The query API uses <code>start_year</code> / <code>end_year</code> as an honest interpretation of the "date range" requirement &mdash; rather than fabricating fake month/day values to match a date-based API.
+    </p>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- GENRE FILTERING -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="genre">
+    <span class="section-tag">Query Strategy</span>
+    <h2>Genre Filtering: LIKE vs Normalization</h2>
+    <p>
+      Genres are stored as a single comma-separated string rather than normalized into a junction table:
+    </p>
+    <ul>
+      <li>DuckDB is an <span class="jargon"><span class="jargon-term">OLAP</span></span> engine where denormalized data is idiomatic</li>
+      <li><code>ILIKE '%Action%'</code> (case-insensitive) is pushed down to DuckDB's scan layer and is efficient on columnar data</li>
+      <li>A junction table would add join complexity with no performance benefit for analytical workloads</li>
+    </ul>
+
+    <div class="tradeoff">
+      Substring matching could theoretically produce false positives (e.g., "Drama" matching "Melodrama"), but the dataset's genre vocabulary doesn't contain such conflicts.
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- TASK STATE -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="task-state">
+    <span class="section-tag">State Management</span>
+    <h2>Task State: In-Memory Dict</h2>
+    <p>Task progress is tracked in a plain Python dict:</p>
+    <ul>
+      <li>Single-process FastAPI &mdash; no cross-process state needed</li>
+      <li>Dict mutations are <span class="jargon"><span class="jargon-term">GIL</span></span>-safe between the background thread and SSE generator
+        <span class="jargon-explain">Python's Global Interpreter Lock (GIL) ensures only one thread runs Python bytecode at a time. This makes simple dict read/write operations inherently thread-safe without needing explicit locks.</span>
+      </li>
+      <li>Task state is ephemeral by nature &mdash; it only needs to survive until the client reads it</li>
+    </ul>
+
+    <div class="highlight-card">
+      <p>
+        <strong>Production upgrade:</strong> This would be replaced with Redis or a database-backed solution for horizontal scaling and persistence across restarts.
+      </p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- BENCHMARKS -->
+  <!-- ══════════════════════════════════════════ -->
+  <div class="doc-section fade-up" id="benchmarks">
+    <span class="section-tag">Performance</span>
+    <h2>Benchmarks</h2>
+    <p class="bench-env">
+      Measured on Apple M1 &middot; 367,314-row CSV (15.8 MB) &middot; Python 3.13 &middot; DuckDB 1.3
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-val">0.52<span class="stat-unit">s</span></div>
+        <div class="stat-label">Upload + Ingest</div>
+        <div class="stat-note">DuckDB native read_csv with atomic staging swap</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:52%"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">0.03<span class="stat-unit">s</span></div>
+        <div class="stat-label">Query (Filtered)</div>
+        <div class="stat-note">8,377 Action movies, 2020&ndash;2023</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:3%"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">0.83<span class="stat-unit">s</span></div>
+        <div class="stat-label">Query (All Rows)</div>
+        <div class="stat-note">367,314 rows serialized to JSON</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:83%"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">0.49<span class="stat-unit">s</span></div>
+        <div class="stat-label">Download (Gzip)</div>
+        <div class="stat-note">4.9 MB gzipped CSV via StreamingResponse</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:49%"></div></div>
+      </div>
+    </div>
+
+    <!-- Memory -->
+    <div class="memory-stat">
+      <div class="mem-label">Server <span class="jargon"><span class="jargon-term" style="font-size:inherit">RSS</span></span></div>
+      <div class="mem-bar">
+        <div class="mem-bar-idle" style="width:29.5%"></div>
+        <div class="mem-bar-peak" style="width:29.5%" id="memBarPeak"></div>
+      </div>
+      <div class="mem-values">
+        <span style="color:var(--accent)">85 MB idle</span>
+        <span style="color:var(--text-muted)">&rarr;</span>
+        <span style="color:var(--text)">288 MB peak</span>
+      </div>
+    </div>
+    <span class="jargon-explain" style="margin-top:8px">RSS (Resident Set Size) is how much actual physical RAM a process is currently using, as opposed to virtual memory it has reserved. This includes DuckDB's internal buffer pool and query materialization buffers.</span>
+
+    <div style="text-align:center;margin-top:24px">
+      <p style="font-size:.85rem;color:var(--text-muted)">
+        Run benchmarks: <code>uv run python benchmark.py movies.csv</code>
+        <br><span style="font-size:.8rem">(requires server running on port 8000)</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <hr class="divider">
+  <div class="doc-footer">
+    <p><a href="/">Back to Dashboard</a></p>
+  </div>
+
+</div>
+
+<script>
+// Nav scroll effect
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 10);
+});
+
+// Collapsible toggle
+function toggleCollapsible(header) {
+  const collapsible = header.closest('.collapsible');
+  collapsible.classList.toggle('open');
+}
+
+// Animate memory bar on scroll
+const memBar = document.getElementById('memBarPeak');
+let memAnimated = false;
+const memObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !memAnimated) {
+      memAnimated = true;
+      setTimeout(() => {
+        memBar.style.transition = 'width 1.2s cubic-bezier(.22,1,.36,1)';
+        memBar.style.width = '100%';
+      }, 200);
+    }
+  });
+}, { threshold: 0.5 });
+if (memBar) memObserver.observe(memBar.closest('.memory-stat'));
+
+// Animate stat bars on scroll
+document.querySelectorAll('.stat-bar-inner').forEach(bar => {
+  const target = bar.style.width;
+  bar.style.width = '0';
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        setTimeout(() => { bar.style.width = target; }, 300);
+        observer.disconnect();
+      }
+    });
+  }, { threshold: 0.3 });
+  observer.observe(bar.closest('.stat-card'));
+});
+
+// Fade-up animation on scroll
+const fadeEls = document.querySelectorAll('.fade-up');
+const fadeObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.animationPlayState = 'running';
+    }
+  });
+}, { threshold: 0.1 });
+fadeEls.forEach(el => {
+  el.style.animationPlayState = 'paused';
+  fadeObserver.observe(el);
+});
+</script>
+
+</body>
+</html>

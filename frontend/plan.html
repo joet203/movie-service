@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Implementation Plan - Movie Database Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --accent:#1863DC;
+  --accent-light:#e8f0fe;
+  --accent-hover:#1455c0;
+  --accent-subtle:rgba(24,99,220,0.08);
+  --bg:#ffffff;
+  --bg-warm:#fafafa;
+  --bg-section:#f5f6f8;
+  --surface:#ffffff;
+  --border:#e5e7eb;
+  --border-light:#f0f1f3;
+  --text:#111827;
+  --text-secondary:#6b7280;
+  --text-muted:#9ca3af;
+  --success:#059669;
+  --success-bg:#ecfdf5;
+  --error:#dc2626;
+  --error-bg:#fef2f2;
+  --warning:#d97706;
+  --radius:10px;
+  --radius-sm:7px;
+  --radius-lg:14px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.04);
+  --shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,0.07),0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.08),0 4px 6px -4px rgba(0,0,0,0.04);
+  --font-display:'Newsreader',Georgia,serif;
+  --font-body:'Outfit',system-ui,sans-serif;
+  --explain-bg:#f0f4ff;
+  --explain-text:#4b6a9b;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.7}
+
+/* Nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-light);transition:box-shadow .3s}
+nav.scrolled{box-shadow:var(--shadow)}
+.nav-inner{max-width:860px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-logo{font-family:var(--font-display);font-size:1.15rem;font-weight:600;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:8px}
+.nav-logo .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.back-link{font-size:.82rem;font-weight:500;color:var(--text-secondary);text-decoration:none;padding:6px 12px;border-radius:6px;transition:all .2s;display:flex;align-items:center;gap:6px}
+.back-link:hover{color:var(--text);background:var(--bg-section)}
+.back-link svg{width:15px;height:15px}
+
+/* Shell */
+.shell{max-width:860px;margin:0 auto;padding:0 28px}
+
+/* Hero */
+.hero{text-align:center;padding:100px 0 48px}
+.hero h1{font-family:var(--font-display);font-size:2.8rem;font-weight:400;letter-spacing:-0.03em;line-height:1.15;color:var(--text);max-width:650px;margin:0 auto}
+.hero h1 em{font-style:italic;color:var(--accent)}
+.hero p{color:var(--text-secondary);font-size:1rem;margin:14px auto 0;max-width:520px}
+.hero-meta{display:flex;justify-content:center;gap:32px;margin-top:28px;flex-wrap:wrap}
+.hero-meta .tag{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:100px;font-size:.78rem;font-weight:500;border:1px solid var(--border);color:var(--text-secondary);background:var(--bg-warm)}
+.hero-meta .tag svg{width:14px;height:14px;color:var(--accent)}
+
+/* Section */
+.section{padding:40px 0 0}
+.section-head{margin-bottom:24px}
+.section-head h2{font-family:var(--font-display);font-size:1.9rem;font-weight:500;letter-spacing:-0.02em;color:var(--text);line-height:1.2}
+.section-head p{color:var(--text-secondary);margin-top:6px;font-size:.93rem;max-width:560px}
+.section-tag{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px;display:block}
+.section-divider{border:none;border-top:1px solid var(--border-light);margin:48px 0 0}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 28px;margin-bottom:16px;transition:box-shadow .2s}
+.card:hover{box-shadow:var(--shadow-md)}
+
+/* Prose */
+.prose{font-size:.93rem;line-height:1.8;color:var(--text)}
+.prose p{margin-bottom:14px}
+.prose ul,.prose ol{margin-bottom:14px;padding-left:22px}
+.prose li{margin-bottom:6px}
+.prose li::marker{color:var(--accent)}
+.prose strong{font-weight:600;color:var(--text)}
+.prose a{color:var(--accent);text-decoration:none;border-bottom:1px dashed var(--accent)}
+.prose a:hover{border-bottom-style:solid}
+
+/* Inline code */
+.prose code{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.84em;background:var(--bg-section);border:1px solid var(--border-light);border-radius:4px;padding:1px 6px;color:#c7254e}
+
+/* Code blocks */
+pre{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;overflow-x:auto;margin-bottom:16px;font-size:.82rem;line-height:1.65}
+pre code{background:none;border:none;padding:0;color:var(--text);font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace}
+
+/* Syntax highlighting (light theme) */
+.kw{color:#8250df}
+.fn{color:#1863DC}
+.str{color:#0a6640}
+.cm{color:var(--text-muted);font-style:italic}
+.ty{color:#b35900}
+.num{color:#953800}
+.op{color:#636c76}
+.sql-kw{color:#8250df;font-weight:600}
+.flag{color:#953800}
+
+/* Project tree */
+.tree{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.82rem;line-height:1.8}
+.tree .dir{color:var(--accent);font-weight:600}
+.tree .file{color:var(--text)}
+.tree .comment{color:var(--text-muted);font-style:italic;margin-left:8px}
+.tree-indent{display:inline-block}
+
+/* Collapsible sections */
+.collapsible{border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden;transition:box-shadow .2s}
+.collapsible:hover{box-shadow:var(--shadow)}
+.collapsible-header{display:flex;align-items:center;gap:12px;padding:18px 24px;cursor:pointer;background:var(--surface);transition:background .2s;user-select:none}
+.collapsible-header:hover{background:var(--bg-warm)}
+.collapsible-header h3{font-family:var(--font-display);font-size:1.2rem;font-weight:500;color:var(--text);flex:1}
+.collapsible-num{width:30px;height:30px;border-radius:8px;background:var(--accent-light);color:var(--accent);font-size:.82rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.collapsible-arrow{width:20px;height:20px;color:var(--text-muted);transition:transform .3s;flex-shrink:0}
+.collapsible.open .collapsible-arrow{transform:rotate(180deg)}
+.collapsible-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.collapsible.open .collapsible-body{max-height:none}
+.collapsible-content{padding:4px 24px 24px}
+.file-badge{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.72rem;padding:3px 10px;border-radius:5px;background:var(--bg-section);border:1px solid var(--border-light);color:var(--text-secondary);flex-shrink:0}
+
+/* Jargon explanations */
+.jargon{position:relative;border-bottom:1px dotted var(--accent);cursor:help}
+.explain{display:inline;font-style:italic;color:var(--explain-text);font-size:.86em;font-weight:400}
+.explain-block{background:var(--explain-bg);border-left:3px solid var(--accent);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:10px 16px;margin:8px 0 14px;font-size:.85rem;color:var(--explain-text);font-style:italic;line-height:1.6}
+
+/* Tech stack pills */
+.tech-stack{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.tech-pill{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:100px;font-size:.82rem;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .2s}
+.tech-pill:hover{border-color:var(--accent);background:var(--accent-subtle);color:var(--accent)}
+.tech-pill .emoji{font-size:1rem}
+
+/* Endpoint cards */
+.endpoint{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:12px}
+.endpoint-method{display:inline-block;padding:3px 10px;border-radius:5px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-right:8px}
+.method-get{background:#ecfdf5;color:#059669}
+.method-post{background:#e8f0fe;color:#1863DC}
+.endpoint-path{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.88rem;font-weight:500;color:var(--text)}
+.endpoint-desc{margin-top:10px;font-size:.88rem;color:var(--text-secondary);line-height:1.7}
+
+/* Checklist */
+.checklist{list-style:none;padding:0}
+.checklist li{padding:10px 0;border-bottom:1px solid var(--border-light);font-size:.9rem;display:flex;align-items:flex-start;gap:10px}
+.checklist li:last-child{border-bottom:none}
+.check-box{width:18px;height:18px;border:2px solid var(--border);border-radius:4px;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center}
+
+/* Verification steps */
+.verify-step{display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border-light)}
+.verify-step:last-child{border-bottom:none}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:.75rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step-cmd{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.82rem;background:var(--bg-section);border:1px solid var(--border-light);border-radius:6px;padding:6px 12px;display:block;margin-top:4px;color:var(--text);word-break:break-all}
+
+/* Footer */
+.footer{text-align:center;padding:48px 0 64px;color:var(--text-muted);font-size:.8rem}
+.footer-line{width:40px;height:2px;background:var(--accent-light);margin:0 auto 16px;border-radius:1px}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg-section)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+
+/* Responsive */
+@media(max-width:768px){
+  .hero h1{font-size:2rem}
+  .shell{padding:0 18px}
+  .nav-inner{padding:0 18px}
+  .collapsible-header{padding:14px 18px}
+  .collapsible-content{padding:4px 18px 18px}
+  .hero-meta{gap:12px}
+  pre{padding:14px 16px;font-size:.78rem}
+  .tree{padding:16px 18px}
+  .endpoint{padding:14px 16px}
+}
+@media(max-width:480px){
+  .hero{padding:80px 0 32px}
+  .hero h1{font-size:1.65rem}
+  .section-head h2{font-size:1.5rem}
+}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo"><span class="dot"></span> Movie DB</a>
+    <a href="/" class="back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      Back to Dashboard
+    </a>
+  </div>
+</nav>
+
+<div class="shell">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Implementation <em>Plan</em></h1>
+    <p>Architecture and design decisions documented before writing any code. This is an AI workfile created as part of the assessment deliverables.</p>
+    <div class="hero-meta">
+      <span class="tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        FastAPI + DuckDB
+      </span>
+      <span class="tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+        ~367K Rows
+      </span>
+      <span class="tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Senior SWE Assessment
+      </span>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Context -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Context</span>
+      <h2>What We're Building</h2>
+    </div>
+    <div class="prose">
+      <p>Assessment for a Senior SWE role. Build a FastAPI movie database service that handles large datasets with minimal CPU/memory overhead. The provided <code>movies.csv</code> has ~367K rows (16MB) but the design must scale to much larger datasets.</p>
+      <p>Data shape: <code>movie_name VARCHAR, year INTEGER (nullable), genres VARCHAR, rating DOUBLE (nullable)</code>. Genres are comma-separated strings. "Date range" is implemented as <code>start_year</code>/<code>end_year</code> since the data only has year.</p>
+      <p><strong>Design philosophy:</strong> Senior-level restraint &mdash; no dependency bloat. Standard library + DuckDB's native API handles everything. No artificial delays or sleeps anywhere in the codebase.</p>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Tech Stack -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Stack</span>
+      <h2>Technology Choices</h2>
+    </div>
+    <div class="tech-stack">
+      <span class="tech-pill"><span class="emoji">&#9889;</span> FastAPI + Pydantic</span>
+      <span class="tech-pill"><span class="emoji">&#129414;</span> DuckDB</span>
+      <span class="tech-pill"><span class="emoji">&#128220;</span> Python stdlib</span>
+      <span class="tech-pill"><span class="emoji">&#128013;</span> Python 3.13</span>
+    </div>
+    <div class="card prose">
+      <ul>
+        <li><strong>FastAPI + Pydantic</strong> &mdash; provided template, async-native web framework</li>
+        <li><strong>DuckDB</strong> &mdash; persistent on-disk analytical DB with <span class="explain">(an OLAP engine &mdash; a database designed for reading and analyzing large data, not small transactions)</span>, <span class="explain">(out-of-core processing &mdash; can handle data bigger than available RAM by spilling to disk)</span>, native <code>executemany</code> for bulk insert</li>
+        <li><strong>Python stdlib</strong> &mdash; <code>csv.reader</code> for parsing, <code>tempfile</code> for disk streaming, <code>asyncio.to_thread</code> for offloading blocking work</li>
+        <li><strong>Python 3.13</strong> &mdash; pinned <code>&gt;=3.13,&lt;3.14</code> since pydantic-core doesn't support 3.14 yet</li>
+      </ul>
+      <pre><code><span class="flag">$</span> uv add duckdb python-multipart</code></pre>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Project Structure -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Architecture</span>
+      <h2>Project Structure</h2>
+    </div>
+    <div class="tree">
+      <div><span class="file">main.py</span> <span class="comment"># FastAPI app, lifespan, includes router</span></div>
+      <div><span class="dir">app/</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">__init__.py</span> <span class="comment"># (empty)</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">db.py</span> <span class="comment"># DuckDB connection singleton + task state dict</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">model.py</span> <span class="comment"># Pydantic models (request/response)</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">movies.py</span> <span class="comment"># All route handlers + background ingestion</span></div>
+      <div><span class="dir">tests/</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">__init__.py</span> <span class="comment"># (empty)</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">conftest.py</span> <span class="comment"># pytest fixtures: in-memory DuckDB override, test client</span></div>
+      <div><span class="tree-indent">&nbsp;&nbsp;</span><span class="file">test_movies.py</span> <span class="comment"># Full test suite for all endpoints</span></div>
+      <div><span class="file">DESIGN.md</span> <span class="comment"># Design choices explanation</span></div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- File-by-File Plan -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Implementation</span>
+      <h2>File-by-File Plan</h2>
+      <p>Click any section to expand the detailed implementation plan for that file.</p>
+    </div>
+
+    <!-- 1. pyproject.toml -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">1</span>
+        <h3>pyproject.toml</h3>
+        <span class="file-badge">Update</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <ul>
+            <li>Change <code>requires-python</code> to <code>"&gt;=3.13,&lt;3.14"</code></li>
+            <li>Dependencies: <code>fastapi[standard]</code>, <code>pydantic</code>, <code>duckdb</code>, <code>python-multipart</code></li>
+            <li>Dev dependencies: <code>pytest</code>, <code>httpx</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. main.py -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">2</span>
+        <h3>main.py</h3>
+        <span class="file-badge">App Entry Point</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <ul>
+            <li>Use <code>asynccontextmanager</code> <span class="explain">(a Python pattern for setup/teardown that works with async code)</span> for the lifespan <span class="explain">(FastAPI's way of running code when the server starts up and shuts down)</span>:
+              <ul>
+                <li>Call <code>db.init_db()</code> to create persistent DuckDB connection + movies table</li>
+                <li>On shutdown: call <code>db.close_db()</code></li>
+              </ul>
+            </li>
+            <li>Create <code>FastAPI(lifespan=lifespan)</code></li>
+            <li>Include <code>movies_router</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. app/db.py -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">3</span>
+        <h3>app/db.py</h3>
+        <span class="file-badge">Database &amp; Task State</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <p><strong>DuckDB connection (module-level singleton):</strong></p>
+          <ul>
+            <li><code>_conn: duckdb.DuckDBConnection | None = None</code></li>
+            <li><code>init_db()</code> &mdash; connects to <code>movies.duckdb</code>, runs:</li>
+          </ul>
+          <pre><code><span class="sql-kw">CREATE TABLE IF NOT EXISTS</span> movies (
+    movie_name <span class="ty">VARCHAR</span>,
+    year <span class="ty">INTEGER</span>,
+    genres <span class="ty">VARCHAR</span>,
+    rating <span class="ty">DOUBLE</span>
+)</code></pre>
+          <ul>
+            <li><code>get_db()</code> &mdash; returns <code>_conn</code>, raises <code>RuntimeError</code> if not initialized</li>
+            <li><code>close_db()</code> &mdash; closes connection, sets <code>_conn = None</code></li>
+          </ul>
+          <p><strong>Task state (module-level dict):</strong></p>
+          <ul>
+            <li><code>tasks: dict[str, dict] = {}</code> &mdash; maps <code>task_id</code> to <code>{"status", "progress", "error"}</code></li>
+            <li>Simple dict is fine &mdash; single-process FastAPI, no need for Redis/external store. Operations on Python dicts are <span class="explain">(GIL-safe &mdash; Python's Global Interpreter Lock makes simple dict operations safe between threads)</span>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. app/model.py -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">4</span>
+        <h3>app/model.py</h3>
+        <span class="file-badge">Pydantic Models</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <p><strong>Response models:</strong></p>
+          <pre><code><span class="kw">class</span> <span class="ty">Movie</span>(<span class="ty">BaseModel</span>):
+    movie_name: <span class="ty">str</span>
+    year: <span class="ty">int</span> | <span class="ty">None</span>
+    genres: <span class="ty">str</span>
+    rating: <span class="ty">float</span> | <span class="ty">None</span>
+
+<span class="kw">class</span> <span class="ty">TaskResponse</span>(<span class="ty">BaseModel</span>):
+    task_id: <span class="ty">str</span>
+
+<span class="kw">class</span> <span class="ty">TaskStatus</span>(<span class="ty">BaseModel</span>):
+    status: <span class="ty">str</span>
+    progress: <span class="ty">int</span>
+    error: <span class="ty">str</span> | <span class="ty">None</span> = <span class="ty">None</span>
+
+<span class="kw">class</span> <span class="ty">HealthResponse</span>(<span class="ty">BaseModel</span>):
+    status: <span class="ty">str</span></code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. app/movies.py -->
+    <div class="collapsible open" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">5</span>
+        <h3>app/movies.py</h3>
+        <span class="file-badge">Route Handlers</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+
+          <!-- GET /health -->
+          <div class="endpoint">
+            <span class="endpoint-method method-get">GET</span>
+            <span class="endpoint-path">/health</span>
+            <div class="endpoint-desc">Return <code>{"status": "ok"}</code></div>
+          </div>
+
+          <!-- POST /datasets -->
+          <div class="endpoint">
+            <span class="endpoint-method method-post">POST</span>
+            <span class="endpoint-path">/datasets</span>
+            <div class="endpoint-desc">
+              <p>Accept <code>file: UploadFile</code>, return <code>TaskResponse</code> with HTTP 202.</p>
+              <ol>
+                <li><strong>Stream to temp file</strong> &mdash; read <code>UploadFile</code> in 1MB chunks, write to <code>tempfile.NamedTemporaryFile(delete=False, suffix='.csv')</code>. Never hold full file in memory.</li>
+                <li>Generate <code>task_id = str(uuid4())</code></li>
+                <li>Store in <code>tasks[task_id]</code> with status <code>"pending"</code></li>
+                <li>Kick off background work via <code>BackgroundTasks</code> <span class="explain">(FastAPI feature that runs work after the HTTP response is sent)</span></li>
+                <li>Return <code>TaskResponse(task_id=task_id)</code></li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- Background ingestion -->
+          <div style="margin:20px 0">
+            <p><strong>Background: <code>_ingest_csv(task_id, temp_path)</code></strong></p>
+            <div class="explain-block">
+              Runs in a thread pool <span class="explain">(a set of pre-created threads ready to run work, avoiding the overhead of creating new threads)</span> via <code>asyncio.to_thread</code>. This is a synchronous function executed off the event loop. No sleeps, no artificial delays.
+            </div>
+            <ol>
+              <li><strong>Set status</strong> to <code>"processing"</code></li>
+              <li>
+                <strong>Count rows (fast pass)</strong> &mdash; iterate lines with <code>for _ in f</code>, count them, subtract 1 for header. This is a fast sequential read &mdash; no CSV parsing, just newline counting.
+              </li>
+              <li>
+                <strong>Atomic table replace via staging</strong> <span class="explain">(atomic swap &mdash; replacing data in one indivisible operation; readers see either all old or all new data, never a mix)</span>:
+                <ul>
+                  <li><code>DROP TABLE IF EXISTS movies_staging</code></li>
+                  <li><code>CREATE TABLE movies_staging (...)</code></li>
+                  <li>Ingest all rows into <code>movies_staging</code></li>
+                  <li>After ingestion: <code>BEGIN TRANSACTION; DROP TABLE IF EXISTS movies; ALTER TABLE movies_staging RENAME TO movies; COMMIT;</code></li>
+                </ul>
+              </li>
+              <li>
+                <strong>Parse &amp; batch insert</strong> with <code>csv.reader</code> + <code>executemany</code> <span class="explain">(DuckDB's fastest way to insert data, bypassing SQL parsing entirely)</span>:
+                <ul>
+                  <li>Open temp file with <code>csv.reader(f)</code></li>
+                  <li>Skip and validate header row</li>
+                  <li>Parse <code>year</code> as int (or None), <code>rating</code> as float (or None)</li>
+                  <li>Accumulate tuples into batch list</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Progress updates every 50,000 rows</strong> &mdash; flush batch with <code>executemany</code>, update progress. No sleeps &mdash; progress updates happen naturally at ingestion speed.
+              </li>
+              <li>
+                <strong>Finalize</strong> &mdash; execute atomic swap, <code>os.unlink(temp_path)</code>, set progress to 100%.
+              </li>
+              <li>
+                <strong>Error handling</strong> &mdash; wrap in <code>try/except</code>, clean up staging table on failure, ensure temp file is removed in <code>finally</code>.
+              </li>
+            </ol>
+          </div>
+
+          <!-- GET /tasks/:id/events -->
+          <div class="endpoint">
+            <span class="endpoint-method method-get">GET</span>
+            <span class="endpoint-path">/tasks/{task_id}/events</span>
+            <div class="endpoint-desc">
+              <p>SSE <code>StreamingResponse</code> for real-time progress updates.</p>
+              <ul>
+                <li>Look up <code>task_id</code> in tasks dict &mdash; 404 if not found</li>
+                <li>Async generator yields <code>data: {"status", "progress", "error"}\n\n</code></li>
+                <li>Polls tasks dict, yields on change, uses <code>asyncio.sleep(0.5)</code> as a non-blocking poll interval (not an artificial delay &mdash; standard SSE pattern to avoid busy-waiting; the async sleep yields control back to the event loop)</li>
+                <li>Stops when status is <code>"completed"</code> or <code>"error"</code></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- GET /movies -->
+          <div class="endpoint">
+            <span class="endpoint-method method-get">GET</span>
+            <span class="endpoint-path">/movies</span>
+            <div class="endpoint-desc">
+              <p>Query by date range and genre(s), returning a list of movies.</p>
+              <ul>
+                <li>Optional query params: <code>start_year</code>, <code>end_year</code>, <code>genre</code></li>
+                <li>Validate <code>start_year &lt;= end_year</code> if both provided &mdash; 400 otherwise</li>
+                <li>Build SQL dynamically with <span class="explain">(parameterized queries &mdash; SQL with placeholders <code>?</code> that prevent injection attacks)</span></li>
+                <li>Genre matching uses <code>LIKE '%genre%'</code> substring match &mdash; DuckDB applies <span class="explain">(predicate pushdown &mdash; filters at the lowest data-reading level, avoiding loading unnecessary data)</span></li>
+              </ul>
+              <pre><code><span class="sql-kw">SELECT</span> movie_name, year, genres, rating
+<span class="sql-kw">FROM</span> movies
+<span class="sql-kw">WHERE</span> <span class="num">1</span>=<span class="num">1</span>
+  <span class="sql-kw">AND</span> year >= <span class="op">?</span>   <span class="cm">-- if start_year</span>
+  <span class="sql-kw">AND</span> year <= <span class="op">?</span>   <span class="cm">-- if end_year</span>
+  <span class="sql-kw">AND</span> genres <span class="sql-kw">LIKE</span> <span class="op">?</span>  <span class="cm">-- if genre</span></code></pre>
+            </div>
+          </div>
+
+          <!-- GET /datasets/download -->
+          <div class="endpoint">
+            <span class="endpoint-method method-get">GET</span>
+            <span class="endpoint-path">/datasets/download</span>
+            <div class="endpoint-desc">
+              <p>Download the full database as a gzipped CSV.</p>
+              <ol>
+                <li>Check table has data &mdash; 404 if empty</li>
+                <li>Use DuckDB's native <code>COPY ... TO ... COMPRESSION 'gzip'</code> &mdash; the database handles gzip compression natively and efficiently</li>
+                <li>Stream the <code>.csv.gz</code> file in 64KB chunks via <code>StreamingResponse</code></li>
+                <li>Set <code>Content-Disposition: attachment; filename="movies.csv.gz"</code></li>
+                <li>Clean up temp file after all chunks are yielded</li>
+              </ol>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. tests/conftest.py -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">6</span>
+        <h3>tests/conftest.py</h3>
+        <span class="file-badge">Test Fixtures</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <ul>
+            <li><code>@pytest.fixture</code> that:
+              <ul>
+                <li>Patches <code>db._conn</code> with <code>duckdb.connect(":memory:")</code></li>
+                <li>Creates the movies table in memory</li>
+                <li>Provides <code>TestClient(app)</code></li>
+                <li>Tears down after test (closes in-memory connection)</li>
+              </ul>
+            </li>
+            <li>Small test CSV fixture as <code>StringIO</code> or temp file (5&ndash;10 rows with edge cases: missing year, missing rating, multiple genres)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. tests/test_movies.py -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">7</span>
+        <h3>tests/test_movies.py</h3>
+        <span class="file-badge">Test Suite</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <ul>
+            <li><strong>test_health</strong> &mdash; GET /health returns 200 + <code>{"status": "ok"}</code></li>
+            <li><strong>test_upload_csv</strong> &mdash; POST /datasets with test CSV returns 202 + task_id</li>
+            <li><strong>test_upload_and_poll</strong> &mdash; Upload, then poll SSE until completed, verify progress reaches 100%</li>
+            <li><strong>test_query_no_filters</strong> &mdash; GET /movies returns all uploaded rows</li>
+            <li><strong>test_query_by_year_range</strong> &mdash; filter by start/end year</li>
+            <li><strong>test_query_by_genre</strong> &mdash; filter by genre substring</li>
+            <li><strong>test_query_combined</strong> &mdash; year range + genre filter together</li>
+            <li><strong>test_query_empty_result</strong> &mdash; filters that match nothing return <code>[]</code></li>
+            <li><strong>test_download</strong> &mdash; decompress gzip, verify CSV content matches</li>
+            <li><strong>test_task_not_found</strong> &mdash; GET /tasks/bad-id/events returns 404</li>
+            <li><strong>test_upload_invalid_file</strong> &mdash; malformed content triggers error state</li>
+            <li><strong>test_query_invalid_year_range</strong> &mdash; start_year > end_year returns 400</li>
+            <li><strong>test_upload_bad_headers</strong> &mdash; wrong column names trigger error state</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. DESIGN.md -->
+    <div class="collapsible" onclick="this.classList.toggle('open')">
+      <div class="collapsible-header">
+        <span class="collapsible-num">8</span>
+        <h3>DESIGN.md</h3>
+        <span class="file-badge">Design Choices</span>
+        <svg class="collapsible-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content prose">
+          <p>Brief document covering:</p>
+          <ul>
+            <li><strong>Why DuckDB</strong> &mdash; out-of-core <span class="explain">(can handle data bigger than available RAM by spilling to disk)</span> analytical engine, zero-config, <code>executemany</code> for O(1) memory bulk insert</li>
+            <li><strong>Why stdlib-only for CSV parsing</strong> &mdash; no dependency bloat, <code>csv.reader</code> handles quoted fields correctly, senior-level restraint</li>
+            <li><strong>Memory management</strong> &mdash; streaming upload (1MB chunks), <code>executemany</code> (no SQL parsing overhead), streaming download (DuckDB native gzip + chunked file read)</li>
+            <li><strong>SSE design</strong> &mdash; dict-based task state, real progress from row counts, no artificial delays</li>
+            <li><strong>Atomic data replacement</strong> &mdash; staging table + rename (no partial state visible to queries)</li>
+            <li><strong>Two-pass ingestion trade-off</strong> &mdash; counting lines first doubles file I/O but enables real progress tracking. Acceptable because the count pass is a fast sequential scan (no parsing) and OS page cache makes the second pass essentially free</li>
+            <li><strong>Trade-offs acknowledged</strong> &mdash; single-process task state (no horizontal scaling), task history not persisted across restarts</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Dependencies -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Setup</span>
+      <h2>Dependency Commands</h2>
+    </div>
+    <div class="card prose">
+      <pre><code><span class="cm"># Pin Python version in pyproject.toml:</span>
+<span class="cm"># requires-python = "&gt;=3.13,&lt;3.14"</span>
+
+<span class="flag">$</span> uv add duckdb python-multipart
+<span class="flag">$</span> uv add <span class="flag">--dev</span> pytest httpx</code></pre>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Verification -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Verification</span>
+      <h2>How to Verify</h2>
+      <p>Step-by-step commands to confirm everything works.</p>
+    </div>
+    <div class="card">
+      <div class="verify-step">
+        <span class="step-num">1</span>
+        <div>
+          <div>Install all dependencies</div>
+          <code class="step-cmd">uv sync</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">2</span>
+        <div>
+          <div>Start dev server</div>
+          <code class="step-cmd">uv run fastapi dev main.py</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">3</span>
+        <div>
+          <div>Upload CSV dataset</div>
+          <code class="step-cmd">curl -X POST -F "file=@movies.csv" http://localhost:8000/datasets</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">4</span>
+        <div>
+          <div>Poll SSE for progress</div>
+          <code class="step-cmd">curl -N http://localhost:8000/tasks/{task_id}/events</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">5</span>
+        <div>
+          <div>Query movies with filters</div>
+          <code class="step-cmd">curl "http://localhost:8000/movies?start_year=2020&amp;end_year=2023&amp;genre=Action"</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">6</span>
+        <div>
+          <div>Download gzipped dataset</div>
+          <code class="step-cmd">curl -o movies.csv.gz http://localhost:8000/datasets/download</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">7</span>
+        <div>
+          <div>Verify gzip integrity</div>
+          <code class="step-cmd">gunzip -t movies.csv.gz && zcat movies.csv.gz | head</code>
+        </div>
+      </div>
+      <div class="verify-step">
+        <span class="step-num">8</span>
+        <div>
+          <div>Run test suite</div>
+          <code class="step-cmd">uv run pytest tests/ -v</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Submission Checklist -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-tag">Deliverables</span>
+      <h2>Submission Checklist</h2>
+    </div>
+    <div class="card">
+      <ul class="checklist">
+        <li><span class="check-box"></span> Working FastAPI application</li>
+        <li><span class="check-box"></span> <code>DESIGN.md</code> with design choices explanation</li>
+        <li><span class="check-box"></span> <code>plan.md</code> (AI workfile &mdash; this plan)</li>
+        <li><span class="check-box"></span> Claude Code conversation/session logs (AI workfiles)</li>
+        <li><span class="check-box"></span> Build/run instructions in README</li>
+        <li><span class="check-box"></span> Package as zipfile for recruiter</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-line"></div>
+    AI workfile &mdash; implementation plan created before coding began.
+  </div>
+
+</div>
+
+<script>
+// Nav scroll shadow
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 10);
+});
+</script>
+
+</body>
+</html>

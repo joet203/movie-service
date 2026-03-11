@@ -24,7 +24,8 @@ CHUNK_SIZE = 1024 * 1024  # 1 MB for upload streaming
 DOWNLOAD_CHUNK = 65_536  # 64 KB for download streaming
 MAX_UPLOAD_BYTES = 10_000_000_000  # 10 GB upload limit
 DEFAULT_QUERY_LIMIT = 1000
-MAX_QUERY_LIMIT = 10_000
+DEFAULT_MAX_QUERY_LIMIT = 50_000
+MAX_QUERY_LIMIT_ENV = "MOVIES_MAX_QUERY_LIMIT"
 SSE_QUERY_THRESHOLD = 2.0  # seconds
 SSE_DOWNLOAD_THRESHOLD = 2.0  # seconds
 TASK_TTL_SECONDS = 15 * 60
@@ -46,6 +47,31 @@ def _sanitize_error(e: Exception) -> str:
     return "Operation failed — check input and try again"
 
 
+def get_max_query_limit() -> int:
+    raw = os.getenv(MAX_QUERY_LIMIT_ENV)
+    if raw is None:
+        return DEFAULT_MAX_QUERY_LIMIT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid %s value %r; using default %s",
+            MAX_QUERY_LIMIT_ENV,
+            raw,
+            DEFAULT_MAX_QUERY_LIMIT,
+        )
+        return DEFAULT_MAX_QUERY_LIMIT
+    if value < 1:
+        logger.warning(
+            "Invalid %s value %r; must be >= 1, using default %s",
+            MAX_QUERY_LIMIT_ENV,
+            raw,
+            DEFAULT_MAX_QUERY_LIMIT,
+        )
+        return DEFAULT_MAX_QUERY_LIMIT
+    return value
+
+
 def _escape_like(value: str) -> str:
     """Escape SQL LIKE wildcards in user input."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -56,6 +82,15 @@ def _validate_year_range(start_year: int | None, end_year: int | None) -> None:
         raise HTTPException(
             status_code=400,
             detail="start_year must be less than or equal to end_year",
+        )
+
+
+def _validate_limit(limit: int) -> None:
+    max_limit = get_max_query_limit()
+    if limit > max_limit:
+        raise HTTPException(
+            status_code=422,
+            detail=f"limit must be less than or equal to {max_limit}",
         )
 
 
@@ -408,10 +443,11 @@ async def query_movies(
     genre: str | None = None,
     sort_by: str = Query(default="movie_name"),
     sort_order: Literal["asc", "desc"] = "asc",
-    limit: int = Query(default=DEFAULT_QUERY_LIMIT, le=MAX_QUERY_LIMIT, ge=1),
+    limit: int = Query(default=DEFAULT_QUERY_LIMIT, ge=1),
     offset: int = Query(default=0, ge=0),
 ) -> list[Movie]:
     _validate_year_range(start_year, end_year)
+    _validate_limit(limit)
 
     # Run query in background and wait up to 2 seconds.
     # If it exceeds threshold, return task_id and continue via SSE/results endpoints.

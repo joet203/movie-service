@@ -126,6 +126,22 @@ class TestQuery:
         )
         assert resp.status_code == 400
 
+    def test_query_limit_cap_enforced(self, client, populated_db):
+        resp = client.get(
+            "/movies",
+            params={"limit": movies.get_max_query_limit() + 1},
+        )
+        assert resp.status_code == 422
+
+    def test_query_limit_cap_configurable(self, client, populated_db, monkeypatch):
+        monkeypatch.setenv("MOVIES_MAX_QUERY_LIMIT", "2")
+        too_large = client.get("/movies", params={"limit": 3})
+        assert too_large.status_code == 422
+
+        ok = client.get("/movies", params={"limit": 2})
+        assert ok.status_code == 200
+        assert len(ok.json()) == 2
+
     def test_query_auto_async_when_slow(self, client, populated_db, monkeypatch):
         original_run_query = movies._run_query
 

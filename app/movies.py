@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import json
 import os
 import tempfile
 from uuid import uuid4
@@ -17,7 +16,6 @@ router = APIRouter()
 
 EXPECTED_HEADERS = ["movie_name", "year", "genres", "rating"]
 CHUNK_SIZE = 1024 * 1024  # 1 MB for upload streaming
-BATCH_SIZE = 50_000       # rows between progress updates
 DOWNLOAD_CHUNK = 65_536   # 64 KB for download streaming
 
 
@@ -57,72 +55,49 @@ async def upload_dataset(
 
 
 def _ingest_csv(task_id: str, temp_path: str) -> None:
-    """Synchronous ingestion — runs in a thread via asyncio.to_thread."""
+    """Synchronous ingestion — runs in a thread via BackgroundTasks."""
     conn = db.get_db()
     task = db.tasks[task_id]
     task["status"] = "processing"
 
     try:
-        # Step 1: fast line count for progress denominator
-        with open(temp_path, "r", encoding="utf-8", errors="replace") as f:
-            total_rows = sum(1 for _ in f) - 1  # subtract header
-        if total_rows <= 0:
-            raise ValueError("CSV file is empty or contains only a header")
-
-        # Step 2: prepare staging table for atomic swap
-        conn.execute("DROP TABLE IF EXISTS movies_staging")
-        conn.execute(
-            "CREATE TABLE movies_staging ("
-            "movie_name VARCHAR, year INTEGER, genres VARCHAR, rating DOUBLE)"
-        )
-
-        # Step 3: parse + batch insert via executemany
-        rows_done = 0
-        batch: list[tuple] = []
-
+        # Step 1: validate header (quick first-line read, no full parse)
         with open(temp_path, "r", encoding="utf-8", errors="replace") as f:
             reader = csv.reader(f)
-            header = next(reader)
-
-            # Validate header
+            header = next(reader, None)
+            if header is None:
+                raise ValueError("CSV file is empty")
             normalized = [h.strip().lower() for h in header]
             if normalized != EXPECTED_HEADERS:
                 raise ValueError(
-                    f"Invalid CSV headers: expected {EXPECTED_HEADERS}, got {normalized}"
+                    f"Invalid CSV headers: expected {EXPECTED_HEADERS}, "
+                    f"got {normalized}"
                 )
 
-            for row in reader:
-                if len(row) != 4:
-                    continue  # skip malformed rows
+        # Step 2: DuckDB native CSV read — bypasses Python-side parsing entirely.
+        # TRY_CAST gracefully handles dirty data (e.g., "III" in year column).
+        # strict_mode=false tolerates quoting irregularities in the CSV.
+        conn.execute("DROP TABLE IF EXISTS movies_staging")
+        conn.execute(
+            f"""CREATE TABLE movies_staging AS
+            SELECT
+                movie_name,
+                TRY_CAST(year AS INTEGER) AS year,
+                genres,
+                TRY_CAST(rating AS DOUBLE) AS rating
+            FROM read_csv('{temp_path}',
+                columns={{'movie_name': 'VARCHAR', 'year': 'VARCHAR',
+                          'genres': 'VARCHAR', 'rating': 'VARCHAR'}},
+                header=true, auto_detect=false, strict_mode=false)"""
+        )
 
-                movie_name = row[0]
-                try:
-                    year = int(row[1]) if row[1].strip() else None
-                except ValueError:
-                    year = None
-                genres = row[2]
-                try:
-                    rating = float(row[3]) if row[3].strip() else None
-                except ValueError:
-                    rating = None
+        row_count = conn.execute(
+            "SELECT COUNT(*) FROM movies_staging"
+        ).fetchone()[0]
+        if row_count == 0:
+            raise ValueError("CSV file contains only a header (no data rows)")
 
-                batch.append((movie_name, year, genres, rating))
-                rows_done += 1
-
-                if rows_done % BATCH_SIZE == 0:
-                    conn.executemany(
-                        "INSERT INTO movies_staging VALUES (?, ?, ?, ?)", batch
-                    )
-                    batch.clear()
-                    task["progress"] = int(rows_done / total_rows * 100)
-
-        # Flush remaining rows
-        if batch:
-            conn.executemany(
-                "INSERT INTO movies_staging VALUES (?, ?, ?, ?)", batch
-            )
-
-        # Step 4: atomic swap — readers never see partial data
+        # Step 3: atomic swap — readers never see partial data
         conn.execute("BEGIN TRANSACTION")
         conn.execute("DROP TABLE IF EXISTS movies")
         conn.execute("ALTER TABLE movies_staging RENAME TO movies")

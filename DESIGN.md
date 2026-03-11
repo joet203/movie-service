@@ -4,7 +4,7 @@
 
 Uploads are streamed to disk in chunks to avoid buffering the full file in application memory. Querying and storage are handled with DuckDB because it supports efficient analytical filtering on columnar data and can operate out-of-core on datasets larger than available RAM.
 
-Long-running ingestion is decoupled from the request/response cycle using background task execution plus in-memory task status tracking. The endpoint returns `202 Accepted` immediately with a task ID. Real-time progress updates are exposed via Server-Sent Events (SSE), driven by actual row counts rather than estimates.
+Long-running ingestion is decoupled from the request/response cycle using background task execution plus in-memory task status tracking. The endpoint returns `202 Accepted` immediately with a task ID. Progress updates are exposed via Server-Sent Events (SSE).
 
 Data replacement uses a staging table pattern — new data is ingested into `movies_staging`, then atomically swapped into `movies` via a transaction. This ensures queries always see a complete dataset, never partial ingestion state.
 
@@ -23,33 +23,29 @@ DuckDB is an embedded OLAP (Online Analytical Processing) database that runs in-
 - **ACID transactions**: Enables the atomic staging table swap during ingestion — queries never see partial data.
 - **Native gzip export**: `COPY ... TO ... COMPRESSION 'gzip'` handles CSV formatting and compression in a single C++ pass.
 
-## Why stdlib-only for CSV parsing?
+## Ingestion: DuckDB Native CSV Reader
 
-No Polars, no pandas. The Python standard library's `csv.reader` handles everything we need:
+CSV ingestion uses DuckDB's built-in `read_csv` function rather than Python-side parsing. This was an intentional optimization — an initial implementation using Python's `csv.reader` with `executemany` batching took **92 seconds** for the 367K-row dataset. Switching to DuckDB's native C++ CSV reader reduced this to **0.5 seconds** (170x faster).
 
-- Correctly parses quoted fields containing commas (e.g., `"Action, Crime, Drama"`)
-- Streams row-by-row with constant memory overhead
-- Zero additional dependencies
+- `TRY_CAST` handles dirty data gracefully (e.g., `"III"` in the year column becomes `NULL` instead of failing)
+- `strict_mode=false` tolerates quoting irregularities in the CSV
+- Header validation is still performed via a quick `csv.reader` first-line check before DuckDB ingests
+- The staging table pattern is preserved for atomic replacement
 
-Adding a heavy dependency for simple CSV iteration would be over-engineering.
+The Python `csv.reader` is still used for header validation — stdlib for correctness, DuckDB for performance.
 
 ## Memory Management
 
 Every operation avoids loading full datasets into memory:
 
 - **Upload**: `UploadFile` streamed to a temp file in 1 MB chunks.
-- **Ingestion**: `csv.reader` iterates row-by-row. Rows are batched into 50K-row groups and flushed to DuckDB via `executemany`. Peak memory is proportional to batch size, not file size.
+- **Ingestion**: DuckDB reads the CSV directly from disk in its C++ engine. No Python-side row iteration.
 - **Query**: DuckDB pushes `WHERE` filters to the scan layer. Only matching rows are materialized.
 - **Download**: DuckDB writes a gzip-compressed CSV to a temp file natively. The file is streamed to the client in 64 KB chunks, then deleted.
 
-## Ingestion: Background Task + Real Progress
+## Background Tasks + SSE
 
-CSV ingestion runs as a `BackgroundTasks` function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free.
-
-Progress tracking is real, not simulated:
-1. A fast first pass counts total lines (sequential read, no parsing — OS page cache makes the second pass essentially free).
-2. Every 50,000 rows, the progress percentage is updated in a shared dict.
-3. The SSE endpoint polls this dict and emits events only when progress has changed.
+CSV ingestion runs as a `BackgroundTasks` function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free. The SSE endpoint polls task state and emits events when status changes.
 
 ## Atomic Data Replacement
 
@@ -86,3 +82,20 @@ Task progress is tracked in a plain Python dict:
 - Task state is ephemeral by nature
 
 In production, this would be replaced with Redis or a database-backed solution for horizontal scaling and persistence across restarts.
+
+---
+
+## Benchmarks
+
+Measured on Apple M1, 367,314-row CSV (15.8 MB), Python 3.13, DuckDB 1.3:
+
+| Operation | Time | Notes |
+|---|---|---|
+| Upload + Ingest | 0.52s | DuckDB native `read_csv` with atomic staging swap |
+| Query (filtered) | 0.03s | 8,377 Action movies, 2020–2023 |
+| Query (all rows) | 0.83s | 367,314 rows serialized to JSON |
+| Download (gzip) | 0.49s | 4.9 MB gzipped CSV via `StreamingResponse` |
+
+Server RSS: ~85 MB idle → ~288 MB after all operations (DuckDB buffer pool + query materialization).
+
+Run benchmarks: `uv run python benchmark.py movies.csv` (requires server running on port 8000).

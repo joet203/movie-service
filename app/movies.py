@@ -424,7 +424,21 @@ def _ingest_csv(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/tasks/{task_id}/events")
+@router.get(
+    "/tasks/{task_id}/events",
+    summary="Stream task progress events",
+    description=(
+        "SSE stream for upload, query, or export tasks. "
+        "Each event contains `status`, `progress`, and optional `error` until the task reaches a terminal state."
+    ),
+    responses={
+        200: {
+            "description": "Server-Sent Events task progress stream",
+            "content": {"text/event-stream": {}},
+        },
+        404: {"description": "Task id was not found"},
+    },
+)
 async def task_events(task_id: str) -> StreamingResponse:
     _prune_tasks()
     if not db.task_exists(task_id):
@@ -571,7 +585,19 @@ async def query_movies_async(
     return TaskResponse(task_id=task_id)
 
 
-@router.get("/tasks/{task_id}/results")
+@router.get(
+    "/tasks/{task_id}/results",
+    summary="Fetch async query results",
+    description=(
+        "Returns JSON rows for a completed query task created by `POST /movies/query` "
+        "or by `GET /movies` when it auto-hands off to task mode."
+    ),
+    responses={
+        200: {"description": "Query results for completed task"},
+        404: {"description": "Task not found or results unavailable"},
+        409: {"description": "Task exists but is not completed yet"},
+    },
+)
 def get_task_results(task_id: str, response: Response):
     """Retrieve results of a completed async query."""
     _prune_tasks()
@@ -601,6 +627,12 @@ def get_task_results(task_id: str, response: Response):
 
 @router.get(
     "/datasets/download",
+    summary="Download dataset as gzipped CSV",
+    description=(
+        "Returns the dataset immediately when export prep is fast. "
+        "If export prep exceeds the long-request threshold, returns `202` with a task id; "
+        "track progress on `/tasks/{task_id}/events` and fetch the file from `/tasks/{task_id}/download`."
+    ),
     responses={
         200: {
             "description": "Gzipped CSV file",
@@ -649,7 +681,23 @@ async def download_dataset(
     )
 
 
-@router.get("/tasks/{task_id}/download")
+@router.get(
+    "/tasks/{task_id}/download",
+    summary="Download completed export artifact",
+    description=(
+        "Downloads the gzip file for a completed export task. "
+        "Use this endpoint after `GET /datasets/download` returns `202` with a `task_id`. "
+        "This endpoint only works for export tasks; query/upload tasks do not have downloadable artifacts."
+    ),
+    responses={
+        200: {
+            "description": "Gzipped CSV export artifact",
+            "content": {"application/gzip": {}},
+        },
+        404: {"description": "Task not found or task has no download artifact"},
+        409: {"description": "Task exists but export is not completed yet"},
+    },
+)
 def download_task_file(task_id: str) -> StreamingResponse:
     _prune_tasks()
     task = db.get_task(task_id)

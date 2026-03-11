@@ -4,3 +4,5 @@ __pycache__/
 *.duckdb
 *.duckdb.wal
 .pytest_cache/
+movies_large.csv
+frontend/movies_large.csv

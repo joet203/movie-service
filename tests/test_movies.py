@@ -1,8 +1,10 @@
 import gzip
 import io
 import json
+import time
 
 from app import db
+from app import movies
 
 
 class TestHealth:
@@ -124,6 +126,120 @@ class TestQuery:
         )
         assert resp.status_code == 400
 
+    def test_query_total_count_header(self, client, populated_db):
+        resp = client.get("/movies")
+        assert "X-Total-Count" in resp.headers
+        assert int(resp.headers["X-Total-Count"]) == 6
+
+    def test_query_limit_cap_enforced(self, client, populated_db):
+        resp = client.get(
+            "/movies",
+            params={"limit": movies.get_max_query_limit() + 1},
+        )
+        assert resp.status_code == 422
+
+    def test_query_limit_cap_configurable(self, client, populated_db, monkeypatch):
+        monkeypatch.setenv("MOVIES_MAX_QUERY_LIMIT", "2")
+        too_large = client.get("/movies", params={"limit": 3})
+        assert too_large.status_code == 422
+
+        ok = client.get("/movies", params={"limit": 2})
+        assert ok.status_code == 200
+        assert len(ok.json()) == 2
+
+    def test_query_auto_async_when_slow(self, client, populated_db, monkeypatch):
+        original_run_query = movies._run_query
+
+        def slow_run_query(*args, **kwargs):
+            time.sleep(0.05)
+            return original_run_query(*args, **kwargs)
+
+        monkeypatch.setattr(movies, "_run_query", slow_run_query)
+        monkeypatch.setattr(movies, "SSE_QUERY_THRESHOLD", 0.001)
+
+        resp = client.get("/movies", params={"genre": "Action"})
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+
+        # Poll for completion
+        for _ in range(20):
+            rr = client.get(f"/tasks/{task_id}/results")
+            if rr.status_code == 200:
+                break
+            assert rr.status_code == 409
+            time.sleep(0.01)
+
+        assert rr.status_code == 200
+        movies_result = rr.json()
+        assert len(movies_result) > 0
+        for m in movies_result:
+            assert "Action" in m["genres"]
+
+
+class TestAsyncQuery:
+    def test_async_query(self, client, populated_db):
+        resp = client.post("/movies/query", params={"genre": "Action"})
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+
+        # TestClient runs background tasks synchronously
+        assert db.tasks[task_id]["status"] == "completed"
+
+        # Fetch results
+        resp = client.get(f"/tasks/{task_id}/results")
+        assert resp.status_code == 200
+        movies = resp.json()
+        assert len(movies) > 0
+        for m in movies:
+            assert "Action" in m["genres"]
+        assert "X-Total-Count" in resp.headers
+
+    def test_async_query_sse(self, client, populated_db):
+        resp = client.post("/movies/query")
+        task_id = resp.json()["task_id"]
+
+        resp = client.get(f"/tasks/{task_id}/events")
+        events = []
+        for line in resp.text.strip().split("\n"):
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+        assert events[-1]["status"] == "completed"
+        assert events[-1]["progress"] == 100
+
+    def test_async_query_results_not_ready(self, client):
+        # Task doesn't exist
+        resp = client.get("/tasks/fake-id/results")
+        assert resp.status_code == 404
+
+    def test_async_query_limit_cap_enforced(self, client, populated_db):
+        resp = client.post(
+            "/movies/query",
+            params={"limit": movies.get_max_query_limit() + 1},
+        )
+        assert resp.status_code == 422
+
+    def test_async_query_limit_cap_configurable(self, client, populated_db, monkeypatch):
+        monkeypatch.setenv("MOVIES_MAX_QUERY_LIMIT", "2")
+        too_large = client.post("/movies/query", params={"limit": 3})
+        assert too_large.status_code == 422
+
+        ok = client.post("/movies/query", params={"limit": 2})
+        assert ok.status_code == 202
+
+    def test_task_pruning_keeps_registry_bounded(self, client, populated_db, monkeypatch):
+        monkeypatch.setattr(movies, "TASK_MAX_COUNT", 2)
+        monkeypatch.setattr(movies, "TASK_TTL_SECONDS", 9999.0)
+
+        task_ids = []
+        for _ in range(3):
+            resp = client.post("/movies/query")
+            assert resp.status_code == 202
+            task_ids.append(resp.json()["task_id"])
+
+        assert task_ids[0] not in db.tasks
+        assert task_ids[1] in db.tasks
+        assert task_ids[2] in db.tasks
+
 
 class TestDownload:
     def test_download(self, client, populated_db):
@@ -140,3 +256,44 @@ class TestDownload:
     def test_download_empty_db(self, client):
         resp = client.get("/datasets/download")
         assert resp.status_code == 404
+
+    def test_download_auto_async_when_slow(self, client, populated_db, monkeypatch):
+        original_run_export = movies._run_export
+
+        def slow_run_export(*args, **kwargs):
+            time.sleep(0.05)
+            return original_run_export(*args, **kwargs)
+
+        monkeypatch.setattr(movies, "_run_export", slow_run_export)
+        monkeypatch.setattr(movies, "SSE_DOWNLOAD_THRESHOLD", 0.001)
+
+        resp = client.get("/datasets/download")
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+
+        # Poll until artifact is ready, then download through task endpoint.
+        for _ in range(20):
+            rr = client.get(f"/tasks/{task_id}/download")
+            if rr.status_code == 200:
+                break
+            assert rr.status_code == 409
+            time.sleep(0.01)
+
+        assert rr.status_code == 200
+        csv_text = gzip.decompress(rr.content).decode("utf-8")
+        lines = csv_text.strip().split("\n")
+        assert lines[0] == "movie_name,year,genres,rating"
+        assert len(lines) == 7
+
+
+class TestTasks:
+    def test_task_download_not_found(self, client):
+        resp = client.get("/tasks/fake-id/download")
+        assert resp.status_code == 404
+
+    def test_task_download_no_artifact_for_non_export_task(self, client, populated_db):
+        resp = client.post("/movies/query", params={"genre": "Action"})
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+        rr = client.get(f"/tasks/{task_id}/download")
+        assert rr.status_code == 404

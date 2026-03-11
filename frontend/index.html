@@ -368,7 +368,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
         <p>Drop a <strong>.csv</strong> file here or click to browse</p>
-        <p class="hint">Need test data? <a href="/sample-data" download="movies.csv" onclick="event.stopPropagation()">Download sample CSV</a> (367K movies)</p>
+        <p class="hint">Need test data? <a href="/sample-data" download="movies.csv" onclick="event.stopPropagation()">Download sample CSV</a> (367K) · <a href="/sample-data-large" download="movies_large.csv" onclick="event.stopPropagation()">Large CSV</a> (10M rows, 461MB)</p>
         <input type="file" id="fileInput" accept=".csv">
       </div>
       <div class="upload-status" id="uploadStatus">
@@ -423,9 +423,18 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
           <option value="desc">Desc</option>
         </select>
         <button type="submit" class="btn btn-primary" id="searchBtn">Search</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text-muted);cursor:pointer;white-space:nowrap" title="Use async query with SSE progress tracking">
+          <input type="checkbox" id="asyncToggle"> Async (SSE)
+        </label>
       </div>
     </div>
   </form>
+
+  <div class="query-progress" id="queryProgress" style="display:none">
+    <div class="upload-file-name" id="queryStatusLabel">Querying...</div>
+    <div class="progress-track"><div class="progress-fill" id="queryProgressFill" style="width:0%"></div></div>
+    <div class="status-line"><span class="tag" id="queryStatusTag">pending</span><span id="queryProgressPct">0%</span></div>
+  </div>
 
   <div class="results-info" id="resultsInfo" style="display:none">
     <span class="results-count" id="resultsCount"></span>
@@ -786,15 +795,14 @@ async function handleFile(file) {
 async function searchMovies(e) {
   e.preventDefault();
   currentPage = 0;
-  await fetchMovies();
+  if (document.getElementById('asyncToggle').checked) {
+    await fetchMoviesAsync();
+  } else {
+    await fetchMovies();
+  }
 }
 
-async function fetchMovies() {
-  const btn = document.getElementById('searchBtn');
-  const area = document.getElementById('resultsArea');
-  const info = document.getElementById('resultsInfo');
-  const pag = document.getElementById('pagination');
-
+function buildQueryParams() {
   const params = new URLSearchParams();
   const g = document.getElementById('genreInput').value.trim();
   const sy = document.getElementById('startYear').value;
@@ -808,6 +816,68 @@ async function fetchMovies() {
   params.set('sort_order', so);
   params.set('limit', currentLimit);
   params.set('offset', currentPage * currentLimit);
+  return params;
+}
+
+function renderMovies(movies, total, elapsed) {
+  const area = document.getElementById('resultsArea');
+  const info = document.getElementById('resultsInfo');
+  const pag = document.getElementById('pagination');
+
+  info.style.display = 'flex';
+  const offset = currentPage * currentLimit;
+  lastTotal = total;
+  if (total > 0) {
+    const from = offset + 1;
+    const to = offset + movies.length;
+    document.getElementById('resultsCount').innerHTML = 'Showing <strong>' + from.toLocaleString() + '&ndash;' + to.toLocaleString() + '</strong> of <strong>' + total.toLocaleString() + '</strong> movies';
+  } else {
+    document.getElementById('resultsCount').innerHTML = '<strong>0</strong> movies found';
+  }
+  document.getElementById('resultsTime').textContent = elapsed + 's';
+
+  if (movies.length === 0 && currentPage === 0) {
+    area.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg><p>No movies match your query</p><p class="sub">Try adjusting your filters</p></div>';
+  } else {
+    let rows = '';
+    for (const m of movies) {
+      const genres = m.genres ? m.genres.split(',').map(g => {
+        const gt = g.trim();
+        const cls = 'genre-' + gt.replace(/[^a-zA-Z]/g, '');
+        return '<span class="genre-pill ' + cls + ' genre-default">' + esc(gt) + '</span>';
+      }).join(' ') : '&mdash;';
+      const rv = m.rating != null ? m.rating.toFixed(1) : '&mdash;';
+      const rp = m.rating != null ? (m.rating / 10 * 100) : 0;
+      rows += '<tr><td>' + esc(m.movie_name) + '</td><td>' + (m.year ?? '&mdash;') + '</td><td>' + genres + '</td><td><div class="rating-visual"><span>' + rv + '</span><div class="rating-bar"><div class="rating-bar-fill" style="width:' + rp + '%"></div></div></div></td></tr>';
+    }
+    const sb = document.getElementById('sortBy').value;
+    const so = document.getElementById('sortOrder').value;
+    const cols = [{label:'Title',key:'movie_name'},{label:'Year',key:'year'},{label:'Genres',key:'genres'},{label:'Rating',key:'rating'}];
+    const ths = cols.map(c => {
+      const active = sb === c.key;
+      const arrow = active ? (so === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;';
+      return '<th class="' + (active ? 'sort-active' : '') + '" onclick="sortByColumn(\'' + c.key + '\')">' + c.label + ' <span class="sort-arrow">' + arrow + '</span></th>';
+    }).join('');
+    area.innerHTML = '<div class="table-wrap"><div class="table-scroll"><table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }
+
+  const totalPages = Math.ceil(total / currentLimit);
+  if (totalPages > 1 || currentPage > 0) {
+    pag.style.display = 'flex';
+    document.getElementById('prevBtn').disabled = currentPage === 0;
+    document.getElementById('nextBtn').disabled = currentPage >= totalPages - 1;
+    document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + ' of ' + totalPages;
+  }
+}
+
+async function fetchMovies() {
+  const btn = document.getElementById('searchBtn');
+  const area = document.getElementById('resultsArea');
+  const info = document.getElementById('resultsInfo');
+  const pag = document.getElementById('pagination');
+  const qp = document.getElementById('queryProgress');
+
+  const params = buildQueryParams();
   lastParams = params;
 
   btn.disabled = true;
@@ -819,60 +889,102 @@ async function fetchMovies() {
   const t0 = performance.now();
   try {
     const r = await fetch(`${API}/movies?${params}`);
+    if (r.status === 202) {
+      const body = await r.json();
+      const { movies, total, elapsed } = await waitForQueryTask(body.task_id, t0);
+      renderMovies(movies, total, elapsed);
+      return;
+    }
     const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
     if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.detail || 'Error ' + r.status); }
     const movies = await r.json();
     const total = parseInt(r.headers.get('X-Total-Count') || '0', 10);
-    lastTotal = total;
-
-    info.style.display = 'flex';
-    const offset = currentPage * currentLimit;
-    if (total > 0) {
-      const from = offset + 1;
-      const to = offset + movies.length;
-      document.getElementById('resultsCount').innerHTML = 'Showing <strong>' + from.toLocaleString() + '&ndash;' + to.toLocaleString() + '</strong> of <strong>' + total.toLocaleString() + '</strong> movies';
-    } else {
-      document.getElementById('resultsCount').innerHTML = '<strong>0</strong> movies found';
-    }
-    document.getElementById('resultsTime').textContent = elapsed + 's';
-
-    if (movies.length === 0 && currentPage === 0) {
-      area.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg><p>No movies match your query</p><p class="sub">Try adjusting your filters</p></div>';
-    } else {
-      let rows = '';
-      for (const m of movies) {
-        const genres = m.genres ? m.genres.split(',').map(g => {
-          const gt = g.trim();
-          const cls = 'genre-' + gt.replace(/[^a-zA-Z]/g, '');
-          return '<span class="genre-pill ' + cls + ' genre-default">' + esc(gt) + '</span>';
-        }).join(' ') : '&mdash;';
-        const rv = m.rating != null ? m.rating.toFixed(1) : '&mdash;';
-        const rp = m.rating != null ? (m.rating / 10 * 100) : 0;
-        rows += '<tr><td>' + esc(m.movie_name) + '</td><td>' + (m.year ?? '&mdash;') + '</td><td>' + genres + '</td><td><div class="rating-visual"><span>' + rv + '</span><div class="rating-bar"><div class="rating-bar-fill" style="width:' + rp + '%"></div></div></div></td></tr>';
-      }
-      const sb = document.getElementById('sortBy').value;
-      const so = document.getElementById('sortOrder').value;
-      const cols = [{label:'Title',key:'movie_name'},{label:'Year',key:'year'},{label:'Genres',key:'genres'},{label:'Rating',key:'rating'}];
-      const ths = cols.map(c => {
-        const active = sb === c.key;
-        const arrow = active ? (so === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;';
-        return '<th class="' + (active ? 'sort-active' : '') + '" onclick="sortByColumn(\'' + c.key + '\')">' + c.label + ' <span class="sort-arrow">' + arrow + '</span></th>';
-      }).join('');
-      area.innerHTML = '<div class="table-wrap"><div class="table-scroll"><table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
-    }
-
-    // Pagination
-    const totalPages = Math.ceil(total / currentLimit);
-    if (totalPages > 1 || currentPage > 0) {
-      pag.style.display = 'flex';
-      document.getElementById('prevBtn').disabled = currentPage === 0;
-      document.getElementById('nextBtn').disabled = currentPage >= totalPages - 1;
-      document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + ' of ' + totalPages;
-    }
+    renderMovies(movies, total, elapsed);
   } catch (err) { showToast(err.message, 'error'); }
   finally {
     btn.disabled = false;
     btn.innerHTML = 'Search';
+    setTimeout(() => { qp.style.display = 'none'; }, 2000);
+  }
+}
+
+async function waitForQueryTask(task_id, t0) {
+  const qp = document.getElementById('queryProgress');
+  const qFill = document.getElementById('queryProgressFill');
+  const qTag = document.getElementById('queryStatusTag');
+  const qPct = document.getElementById('queryProgressPct');
+
+  qp.style.display = 'block';
+  qFill.style.width = '0%';
+  qTag.textContent = 'pending';
+  qTag.className = 'tag';
+  qPct.textContent = '0%';
+
+  await new Promise((resolve, reject) => {
+    const es = new EventSource(`${API}/tasks/${task_id}/events`);
+    es.onmessage = (ev) => {
+      const d = JSON.parse(ev.data);
+      qFill.style.width = d.progress + '%';
+      qPct.textContent = d.progress + '%';
+      qTag.textContent = d.status;
+      if (d.status === 'completed') {
+        qTag.className = 'tag tag-completed';
+        es.close();
+        resolve();
+      } else if (d.status === 'error') {
+        qTag.className = 'tag tag-error';
+        es.close();
+        reject(new Error(d.error || 'Query failed'));
+      }
+    };
+    es.onerror = () => { es.close(); reject(new Error('SSE connection lost')); };
+  });
+
+  const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+  const rr = await fetch(`${API}/tasks/${task_id}/results`);
+  if (!rr.ok) { const err = await rr.json().catch(() => ({})); throw new Error(err.detail || 'Error ' + rr.status); }
+  const movies = await rr.json();
+  const total = parseInt(rr.headers.get('X-Total-Count') || '0', 10);
+  return { movies, total, elapsed };
+}
+
+async function fetchMoviesAsync() {
+  const btn = document.getElementById('searchBtn');
+  const area = document.getElementById('resultsArea');
+  const info = document.getElementById('resultsInfo');
+  const pag = document.getElementById('pagination');
+  const qp = document.getElementById('queryProgress');
+  const qFill = document.getElementById('queryProgressFill');
+  const qTag = document.getElementById('queryStatusTag');
+  const qPct = document.getElementById('queryProgressPct');
+
+  const params = buildQueryParams();
+  lastParams = params;
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div>';
+  area.innerHTML = '';
+  info.style.display = 'none';
+  pag.style.display = 'none';
+  qp.style.display = 'block';
+  qFill.style.width = '0%';
+  qTag.textContent = 'pending';
+  qTag.className = 'tag';
+  qPct.textContent = '0%';
+
+  const t0 = performance.now();
+  try {
+    // Step 1: submit async query
+    const r = await fetch(`${API}/movies/query?${params}`, { method: 'POST' });
+    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.detail || 'Error ' + r.status); }
+    const { task_id } = await r.json();
+    const { movies, total, elapsed } = await waitForQueryTask(task_id, t0);
+    renderMovies(movies, total, elapsed);
+  } catch (err) { showToast(err.message, 'error'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Search';
+    setTimeout(() => { qp.style.display = 'none'; }, 2000);
   }
 }
 
@@ -886,29 +998,76 @@ function sortByColumn(col) {
     soEl.value = col === 'rating' ? 'desc' : 'asc';
   }
   currentPage = 0;
-  fetchMovies();
+  if (document.getElementById('asyncToggle').checked) {
+    fetchMoviesAsync();
+  } else {
+    fetchMovies();
+  }
 }
 
 function changePage(dir) {
   currentPage += dir;
   if (currentPage < 0) currentPage = 0;
-  fetchMovies();
+  if (document.getElementById('asyncToggle').checked) {
+    fetchMoviesAsync();
+  } else {
+    fetchMovies();
+  }
   document.getElementById('browse').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ── Download ──
+async function waitForTaskCompletion(taskId, onUpdate) {
+  await new Promise((resolve, reject) => {
+    const es = new EventSource(`${API}/tasks/${taskId}/events`);
+    es.onmessage = (ev) => {
+      const d = JSON.parse(ev.data);
+      if (onUpdate) onUpdate(d);
+      if (d.status === 'completed') {
+        es.close();
+        resolve();
+      } else if (d.status === 'error') {
+        es.close();
+        reject(new Error(d.error || 'Task failed'));
+      }
+    };
+    es.onerror = () => {
+      es.close();
+      reject(new Error('SSE connection lost'));
+    };
+  });
+}
+
+async function triggerDownloadFromResponse(resp) {
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'movies.csv.gz';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 async function downloadDataset() {
   const btn = document.getElementById('dlBtn');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Preparing...';
   try {
-    const r = await fetch(`${API}/datasets/download`);
-    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.detail || 'Error ' + r.status); }
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'movies.csv.gz'; a.click();
-    URL.revokeObjectURL(url);
+    let r = await fetch(`${API}/datasets/download`);
+    if (r.status === 202) {
+      const body = await r.json();
+      const taskId = body.task_id;
+      await waitForTaskCompletion(taskId, (d) => {
+        btn.innerHTML = '<div class="spinner"></div> Preparing... ' + d.progress + '%';
+      });
+      r = await fetch(`${API}/tasks/${taskId}/download`);
+    }
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error ' + r.status);
+    }
+    await triggerDownloadFromResponse(r);
     showToast('Download started', 'success');
   } catch (err) { showToast(err.message, 'error'); }
   finally { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download .csv.gz'; }

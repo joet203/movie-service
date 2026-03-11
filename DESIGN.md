@@ -8,9 +8,9 @@ Long-running ingestion is decoupled from the request/response cycle using backgr
 
 Data replacement uses a staging table pattern — new data is ingested into `movies_staging`, then atomically swapped into `movies` via a transaction. This ensures queries always see a complete dataset, never partial ingestion state.
 
-Large downloads are returned with `StreamingResponse` over a DuckDB-generated gzip file, so the response is streamed incrementally in 64 KB chunks rather than materialized in memory.
+Large downloads use the same threshold-based model as queries: fast exports return immediately as streamed gzip, and exports that run longer than 2 seconds hand off to task mode (`202` + task ID) with SSE progress and a follow-up download endpoint.
 
-For this take-home, in-process task state (a Python dict) was chosen for simplicity. In production, job execution and status state would be externalized (e.g., Redis, a task queue) to support horizontal scaling and persistence across restarts.
+For this take-home, in-process task state (a Python dict guarded by a lock) was chosen for simplicity. In production, job execution and status state would be externalized (e.g., Redis, a task queue) to support horizontal scaling and persistence across restarts.
 
 ---
 
@@ -47,7 +47,7 @@ Every operation avoids loading full datasets into memory:
 
 CSV ingestion runs as a `BackgroundTasks` function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free. The SSE endpoint polls task state and emits events when status changes.
 
-SSE is used for ingestion because it's the only operation that can exceed the 2-second threshold on large files. Queries are bounded by the 10K row pagination limit (0.03–0.83s even for the full dataset). Downloads stream natively via chunked HTTP response — the client receives data incrementally as DuckDB writes it, so the streaming itself serves as progress. If queries or downloads ever became long-running (e.g., unbounded result sets or multi-GB exports), the same SSE pattern could be applied by wrapping them in a background task.
+SSE is used for ingestion, long queries, and long export preparation. Ingestion can exceed the 2-second threshold on large files. Queries are fast for filtered results (0.03s) but can take longer with large unbounded result sets — the query endpoint auto-hands off to task mode when it crosses the threshold. Downloads follow the same pattern: if export preparation exceeds the threshold, the API returns a task ID, progress is streamed over SSE, and the client fetches the completed gzip via `/tasks/{id}/download`.
 
 ## Atomic Data Replacement
 
@@ -77,10 +77,10 @@ Genres are stored as a single comma-separated string rather than normalized into
 
 ## Task State: In-Memory Dict
 
-Task progress is tracked in a plain Python dict:
+Task progress is tracked in a plain Python dict with a lock:
 
 - Single-process FastAPI — no cross-process state needed
-- Dict mutations are GIL-safe between the background thread and SSE generator
+- Lock-guarded reads/writes prevent races between worker threads and request handlers
 - Task state is ephemeral by nature
 
 In production, this would be replaced with Redis or a database-backed solution for horizontal scaling and persistence across restarts.

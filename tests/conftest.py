@@ -1,6 +1,5 @@
 import io
 
-import duckdb
 import pytest
 from fastapi.testclient import TestClient
 
@@ -19,22 +18,14 @@ Killers of the Flower Moon,,"Crime, Drama, History",
 
 
 @pytest.fixture()
-def client():
-    """TestClient with isolated in-memory database.
-
-    Enter TestClient first (triggers lifespan/init_db), then swap
-    the connection to an in-memory DB so tests are fully isolated.
-    """
+def client(tmp_path, monkeypatch):
+    """TestClient with an isolated DuckDB file per test."""
+    db_path = tmp_path / "test.duckdb"
+    monkeypatch.setenv("MOVIES_DB_PATH", str(db_path))
+    db.clear_tasks()
     with TestClient(app, raise_server_exceptions=False) as c:
-        # Swap to in-memory DB after lifespan has run
-        original = db._conn
-        conn = duckdb.connect(":memory:")
-        conn.execute(db.TABLE_DDL)
-        db._conn = conn
         yield c
-        # Restore original so lifespan's close_db() closes the right one
-        db._conn = original
-        conn.close()
+    db.clear_tasks()
 
 
 @pytest.fixture()

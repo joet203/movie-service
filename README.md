@@ -84,7 +84,7 @@ Open `http://localhost:8000` for the frontend UI, or `http://localhost:8000/docs
 
 ```bash
 make run        # Clean start (kills old server, removes DB, starts fresh)
-make test       # Run all 15 tests
+make test       # Run all 29 tests
 make bench      # Run benchmark suite (starts/stops server automatically)
 make stop       # Stop the running server
 make clean      # Stop server + delete DuckDB files
@@ -102,6 +102,11 @@ uv run fastapi dev main.py
 uv run pytest tests/ -v
 ```
 
+## Runtime Configuration
+
+- `MOVIES_DB_PATH`: DuckDB file path (default: `movies.duckdb`)
+- `MOVIES_MAX_QUERY_LIMIT`: maximum allowed `limit` for `/movies` and `/movies/query` (default: `50000`)
+
 ## Usage Walkthrough
 
 1. **Start the server**: `make run`
@@ -117,8 +122,11 @@ uv run pytest tests/ -v
 | `GET` | `/health` | Health check |
 | `POST` | `/datasets` | Upload CSV (returns 202 + task ID) |
 | `GET` | `/tasks/{id}/events` | SSE progress stream |
-| `GET` | `/movies` | Query movies (params below) |
-| `GET` | `/datasets/download` | Download gzipped CSV |
+| `GET` | `/movies` | Query movies (returns `200` with rows, or `202` + task ID if query exceeds ~2s) |
+| `POST` | `/movies/query` | Async query (returns 202 + task ID) |
+| `GET` | `/tasks/{id}/results` | Fetch async query results |
+| `GET` | `/datasets/download` | Download gzipped CSV (returns `200` directly, or `202` + task ID if export prep exceeds ~2s) |
+| `GET` | `/tasks/{id}/download` | Fetch completed async export artifact |
 | `GET` | `/` | Frontend UI |
 | `GET` | `/sample-data` | Download sample movies.csv |
 
@@ -131,7 +139,7 @@ uv run pytest tests/ -v
 | `genre` | string | — | Case-insensitive genre substring match |
 | `sort_by` | string | `movie_name` | Sort column (`movie_name`, `year`, `genres`, `rating`) |
 | `sort_order` | string | `asc` | Sort direction (`asc` or `desc`) |
-| `limit` | int | 1000 | Results per page (max 10,000) |
+| `limit` | int | 10,000 | Results per page (max from `MOVIES_MAX_QUERY_LIMIT`, default `50,000`) |
 | `offset` | int | 0 | Pagination offset |
 
 The response includes an `X-Total-Count` header with the total number of matching rows (before pagination).
@@ -148,8 +156,17 @@ curl -N http://localhost:8000/tasks/TASK_ID/events
 # Query (with sorting and pagination)
 curl -v "http://localhost:8000/movies?start_year=2020&end_year=2023&genre=Action&sort_by=rating&sort_order=desc&limit=50"
 
+# Async query (for large result sets — returns task ID, poll via SSE)
+curl -X POST "http://localhost:8000/movies/query?genre=Action"
+curl -N http://localhost:8000/tasks/TASK_ID/events
+curl http://localhost:8000/tasks/TASK_ID/results
+
 # Download
 curl -o movies.csv.gz http://localhost:8000/datasets/download
+
+# Slow download path (if /datasets/download returns 202)
+curl -N http://localhost:8000/tasks/TASK_ID/events
+curl -o movies.csv.gz http://localhost:8000/tasks/TASK_ID/download
 ```
 
 ## Project Structure
@@ -157,14 +174,14 @@ curl -o movies.csv.gz http://localhost:8000/datasets/download
 ```
 main.py              Entry point, lifespan, serves frontend
 app/
-  db.py              DuckDB connection singleton + task state
+  db.py              DuckDB connection factory + task state
   model.py           Pydantic response models
   movies.py          All route handlers + background ingestion
 frontend/
   index.html         Single-page dashboard UI
 tests/
   conftest.py        Test fixtures (in-memory DuckDB)
-  test_movies.py     15 tests across all endpoints
+  test_movies.py     29 tests across all endpoints
 DESIGN.md            Architecture and design decisions
 INTERVIEW.md         Interview prep Q&A
 benchmark.py         Performance benchmark script

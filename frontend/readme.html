@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Run Guide - Movie Database Service</title>
+<title>README Guide - Movie Database Service</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -21,6 +21,7 @@
   --text-secondary:#6b7280;
   --text-muted:#9ca3af;
   --radius:10px;
+  --radius-sm:7px;
   --radius-lg:14px;
   --shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
   --font-display:'Newsreader',Georgia,serif;
@@ -40,34 +41,59 @@
 }
 body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
 nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border-light)}
-.nav-inner{max-width:880px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.nav-inner{max-width:980px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .nav-left{display:flex;align-items:center;gap:8px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
 .brand{font-family:var(--font-display);font-size:1.1rem}
-.nav-links{display:flex;align-items:center;gap:8px}
+.nav-actions{display:flex;align-items:center;gap:8px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;text-decoration:none;font-size:.82rem;border:1px solid var(--border);color:var(--text-secondary);background:var(--surface)}
 .btn:hover{color:var(--text);border-color:var(--text-muted)}
-.shell{max-width:880px;margin:0 auto;padding:28px 20px 48px}
-h1{font-family:var(--font-display);font-size:2.2rem;font-weight:400;letter-spacing:-0.02em;line-height:1.2}
-h2{font-family:var(--font-display);font-size:1.35rem;font-weight:500;margin-top:30px;margin-bottom:10px}
-p{font-size:.95rem;color:var(--text-secondary)}
-.lede{margin-top:10px;max-width:660px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-top:14px;box-shadow:var(--shadow)}
-pre{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;overflow-x:auto;font-size:.82rem;line-height:1.55}
-code{font-family:'SF Mono',Monaco,Consolas,monospace}
-table{width:100%;border-collapse:collapse;font-size:.86rem;margin-top:8px}
-th,td{text-align:left;padding:10px;border-bottom:1px solid var(--border-light);vertical-align:top}
-th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600}
-ul{list-style:none;margin-top:6px}
-li{padding:4px 0;color:var(--text-secondary);font-size:.9rem}
-li::before{content:'- ';color:var(--accent)}
-.note{font-size:.84rem;color:var(--text-muted);margin-top:6px}
 .theme-toggle{background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:5px 8px;color:var(--text-muted);display:flex;align-items:center}
 .theme-toggle:hover{color:var(--text);border-color:var(--text-muted)}
 .theme-toggle svg{width:16px;height:16px}
 .theme-toggle .icon-moon,.theme-toggle .icon-sun{display:none}
 [data-theme="light"] .theme-toggle .icon-moon{display:block}
 [data-theme="dark"] .theme-toggle .icon-sun{display:block}
+
+.shell{max-width:980px;margin:0 auto;padding:28px 20px 50px}
+.hero h1{font-family:var(--font-display);font-size:2.4rem;font-weight:400;letter-spacing:-0.02em;line-height:1.15}
+.hero p{margin-top:10px;color:var(--text-secondary);max-width:760px}
+.hero-tools{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+.small-btn{font-family:var(--font-body);font-size:.78rem;padding:7px 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-secondary);cursor:pointer}
+.small-btn:hover{color:var(--text);border-color:var(--text-muted)}
+
+.accordion{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.acc-item{border-bottom:1px solid var(--border-light)}
+.acc-item:last-child{border-bottom:none}
+.acc-trigger{width:100%;text-align:left;background:var(--surface);border:none;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;cursor:pointer}
+.acc-trigger:hover{background:var(--bg-section)}
+.acc-title{font-size:1rem;font-weight:500;color:var(--text)}
+.acc-sub{display:block;font-size:.8rem;color:var(--text-muted);margin-top:2px}
+.acc-chevron{width:18px;height:18px;color:var(--text-muted);transition:transform .2s}
+.acc-item.open .acc-chevron{transform:rotate(180deg);color:var(--accent)}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.acc-item.open .acc-body{max-height:2200px}
+.acc-content{padding:0 18px 16px}
+
+pre{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;overflow-x:auto;font-size:.82rem;line-height:1.55;margin-top:8px}
+code{font-family:'SF Mono',Monaco,Consolas,monospace}
+p{font-size:.92rem;color:var(--text-secondary)}
+.list{list-style:none;margin-top:8px}
+.list li{font-size:.9rem;color:var(--text-secondary);padding:4px 0}
+.list li::before{content:'- ';color:var(--accent)}
+
+table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:10px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--border-light);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600}
+.mono{font-family:'SF Mono',Monaco,Consolas,monospace}
+.note{font-size:.82rem;color:var(--text-muted);margin-top:8px}
+
+@media(max-width:720px){
+  .hero h1{font-size:1.9rem}
+  .acc-title{font-size:.95rem}
+}
 </style>
 </head>
 <body>
@@ -75,9 +101,9 @@ li::before{content:'- ';color:var(--accent)}
   <div class="nav-inner">
     <div class="nav-left">
       <span class="dot"></span>
-      <span class="brand">Movie DB Run Guide</span>
+      <span class="brand">README Guide</span>
     </div>
-    <div class="nav-links">
+    <div class="nav-actions">
       <a class="btn" href="/">Back to Dashboard</a>
       <a class="btn" href="/docs" target="_blank" rel="noopener noreferrer">Swagger</a>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
@@ -89,53 +115,239 @@ li::before{content:'- ';color:var(--accent)}
 </nav>
 
 <div class="shell">
-  <h1>Build and Run</h1>
-  <p class="lede">Quick reviewer guide for running the service and testing the required flows. For detailed rationale, open <a href="/design" style="color:var(--accent);text-decoration:none">Design Choices</a>.</p>
+  <section class="hero">
+    <h1>Movie Database Service</h1>
+    <p>This page mirrors the key details from <span class="mono">README.md</span> in a reviewer-friendly collapsible format.</p>
+    <div class="hero-tools">
+      <a class="btn" href="/design" target="_blank" rel="noopener noreferrer">Design Choices</a>
+      <a class="btn" href="/interview" target="_blank" rel="noopener noreferrer">Interview Prep</a>
+      <a class="btn" href="/plan" target="_blank" rel="noopener noreferrer">Implementation Plan</a>
+    </div>
+    <div class="toolbar">
+      <button class="small-btn" onclick="setAllAccordions(true)">Expand All</button>
+      <button class="small-btn" onclick="setAllAccordions(false)">Collapse All</button>
+    </div>
+  </section>
 
-  <h2>Quick Start</h2>
-  <div class="card">
+  <section class="accordion" id="accRoot">
+    <div class="acc-item open">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Quick Start</span>
+          <span class="acc-sub">Install deps, run service, open UI/docs</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
 <pre><code>uv sync
 make run
 </code></pre>
-    <p class="note">UI: <code>http://localhost:8000/</code> | API docs: <code>http://localhost:8000/docs</code></p>
-  </div>
+          <p class="note">UI: <span class="mono">http://localhost:8000/</span> | API docs: <span class="mono">http://localhost:8000/docs</span></p>
+        </div>
+      </div>
+    </div>
 
-  <h2>Core Endpoints</h2>
-  <div class="card">
-    <table>
-      <thead>
-        <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><code>POST</code></td><td><code>/datasets</code></td><td>Upload CSV and start ingestion task</td></tr>
-        <tr><td><code>GET</code></td><td><code>/movies</code></td><td>Query by year range/genre (auto-task handoff if slow)</td></tr>
-        <tr><td><code>POST</code></td><td><code>/movies/query</code></td><td>Always async query endpoint</td></tr>
-        <tr><td><code>GET</code></td><td><code>/datasets/download</code></td><td>Download gzip export (auto-task handoff if slow)</td></tr>
-        <tr><td><code>GET</code></td><td><code>/tasks/{id}/events</code></td><td>SSE progress stream</td></tr>
-        <tr><td><code>GET</code></td><td><code>/tasks/{id}/results</code></td><td>Fetch completed async query rows</td></tr>
-        <tr><td><code>GET</code></td><td><code>/tasks/{id}/download</code></td><td>Fetch completed async export artifact</td></tr>
-      </tbody>
-    </table>
-  </div>
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Common Commands</span>
+          <span class="acc-sub">Run, test, benchmark, clean</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+<pre><code>make run
+make test
+make bench
+make stop
+make clean
+make help
+</code></pre>
+<pre><code># Without make
+rm -f movies.duckdb movies.duckdb.wal
+uv run fastapi dev main.py
+uv run pytest tests/ -v
+</code></pre>
+        </div>
+      </div>
+    </div>
 
-  <h2>Query Filters</h2>
-  <div class="card">
-    <ul>
-      <li><code>start_year</code> and <code>end_year</code> for year range</li>
-      <li><code>genre</code> for substring filter</li>
-      <li><code>genres_all</code> for match-all genres (AND), e.g. <code>Action,Crime</code></li>
-      <li><code>sort_by</code>, <code>sort_order</code>, <code>limit</code>, <code>offset</code></li>
-    </ul>
-  </div>
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Runtime Configuration</span>
+          <span class="acc-sub">Environment variables and defaults</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+          <ul class="list">
+            <li><span class="mono">MOVIES_DB_PATH</span>: DuckDB file path (default <span class="mono">movies.duckdb</span>)</li>
+            <li><span class="mono">MOVIES_MAX_QUERY_LIMIT</span>: max allowed query limit (default <span class="mono">50000</span>)</li>
+            <li><span class="mono">MOVIES_TASK_POLL_INTERVAL_SECONDS</span>: SSE polling interval (default <span class="mono">0.2</span>)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
 
-  <h2>Demo Tips</h2>
-  <div class="card">
-    <ul>
-      <li>Use the Dashboard "Demo Settings" to force longer operations and observe SSE progress.</li>
-      <li>Data persists in <code>movies.duckdb</code> across restarts by default.</li>
-      <li>Use <code>make run</code> for a clean start (removes old DB files first).</li>
-    </ul>
-  </div>
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Persistence and Demo Notes</span>
+          <span class="acc-sub">Why rows can appear before a new upload</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+          <ul class="list">
+            <li>Data persists across restarts because DuckDB is on-disk.</li>
+            <li>Use <span class="mono">make run</span> for clean demo starts (old DB files removed first).</li>
+            <li>Dashboard demo settings can inject artificial phase delays to force visible task progress.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item open">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">API Endpoints</span>
+          <span class="acc-sub">Primary routes and behavior</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+          <table>
+            <thead>
+              <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/health</span></td><td>Health check</td></tr>
+              <tr><td><span class="mono">POST</span></td><td><span class="mono">/datasets</span></td><td>Upload CSV (202 + task ID)</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/tasks/{id}/events</span></td><td>SSE progress stream</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/movies</span></td><td>Query rows (200 direct or 202 task handoff if >2s)</td></tr>
+              <tr><td><span class="mono">POST</span></td><td><span class="mono">/movies/query</span></td><td>Explicit async query endpoint</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/tasks/{id}/results</span></td><td>Fetch completed async query results</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/datasets/download</span></td><td>Download gzip export (200 or 202 task handoff)</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/tasks/{id}/download</span></td><td>Fetch completed async export artifact</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/</span></td><td>Dashboard UI</td></tr>
+              <tr><td><span class="mono">GET</span></td><td><span class="mono">/sample-data</span></td><td>Download sample CSV</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Query Parameters</span>
+          <span class="acc-sub">Filters, sorting, and pagination</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+          <table>
+            <thead><tr><th>Param</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><span class="mono">start_year</span>, <span class="mono">end_year</span></td><td>Year-range filters</td></tr>
+              <tr><td><span class="mono">genre</span></td><td>Case-insensitive substring genre match</td></tr>
+              <tr><td><span class="mono">genres_all</span></td><td>Comma-separated AND match (all genres must be present)</td></tr>
+              <tr><td><span class="mono">sort_by</span>, <span class="mono">sort_order</span></td><td>Sort field and direction</td></tr>
+              <tr><td><span class="mono">limit</span>, <span class="mono">offset</span></td><td>Pagination controls</td></tr>
+            </tbody>
+          </table>
+          <p class="note">Responses include <span class="mono">X-Total-Count</span>; query responses also include <span class="mono">X-Query-Time</span> in extended version.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">curl Examples</span>
+          <span class="acc-sub">Upload, query, async task flow, and download</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+<pre><code># Upload
+curl -X POST -F "file=@movies.csv" http://localhost:8000/datasets
+
+# Query with match-all genres
+curl -v "http://localhost:8000/movies?start_year=2020&end_year=2023&genres_all=Action,Crime&sort_by=rating&sort_order=desc&limit=50"
+
+# Async query flow
+curl -X POST "http://localhost:8000/movies/query?genre=Action"
+curl -N http://localhost:8000/tasks/TASK_ID/events
+curl http://localhost:8000/tasks/TASK_ID/results
+
+# Download
+curl -o movies.csv.gz http://localhost:8000/datasets/download
+
+# Slow download path
+curl -N http://localhost:8000/tasks/TASK_ID/events
+curl -o movies.csv.gz http://localhost:8000/tasks/TASK_ID/download
+</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Project Structure</span>
+          <span class="acc-sub">Where to look during review</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+<pre><code>main.py              Entry point + frontend/doc routes
+app/
+  db.py              DuckDB connection factory + task registry
+  model.py           Pydantic models
+  movies.py          API handlers + async task flows
+frontend/
+  index.html         Dashboard UI
+  readme.html        This collapsible run guide
+  design.html        Design choices
+  interview.html     Interview prep
+tests/
+  conftest.py        Fixtures
+  test_movies.py     Endpoint and flow tests
+</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <div>
+          <span class="acc-title">Design Summary and Artifacts</span>
+          <span class="acc-sub">High-level decisions and included workfiles</span>
+        </div>
+        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="acc-body">
+        <div class="acc-content">
+          <ul class="list">
+            <li>DuckDB for out-of-core OLAP-style scans and fast native CSV ingest/export.</li>
+            <li>Staging table + atomic swap for safe dataset replacement.</li>
+            <li>SSE for long-running progress visibility on upload/query/download.</li>
+            <li>AI workfiles included: <span class="mono">requirements.md</span>, <span class="mono">plan.md</span>, <span class="mono">plan.html</span>, <span class="mono">DESIGN.md</span>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -153,6 +365,18 @@ function toggleTheme() {
   applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 applyTheme(getPreferredTheme());
+
+function toggleAcc(btn) {
+  const item = btn.closest('.acc-item');
+  item.classList.toggle('open');
+}
+
+function setAllAccordions(open) {
+  document.querySelectorAll('.acc-item').forEach((item) => {
+    if (open) item.classList.add('open');
+    else item.classList.remove('open');
+  });
+}
 </script>
 </body>
 </html>

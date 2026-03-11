@@ -73,3 +73,22 @@ Go to `localhost:8000/docs` for the `Swagger` UI
   - Returns `200` with gzip bytes when export finishes quickly
   - Returns `202` with `task_id` when export exceeds ~2 seconds
 - `GET /tasks/{task_id}/download` — fetch gzip artifact for a completed long-running export
+
+### Quick Verify
+
+```bash
+# 1) Run tests
+uv run pytest -q
+
+# 2) Start server
+uv run fastapi dev main.py
+
+# 3) Upload dataset (returns task_id)
+curl -X POST -F "file=@movies.csv" http://127.0.0.1:8000/datasets
+
+# 4) Query by year range + genre
+curl "http://127.0.0.1:8000/movies?start_year=2020&end_year=2023&genre=Action"
+
+# 5) Download gzipped dataset
+curl -o movies.csv.gz http://127.0.0.1:8000/datasets/download
+```

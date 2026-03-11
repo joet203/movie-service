@@ -6,14 +6,14 @@ Assessment for a Senior SWE role. Build a FastAPI movie database service that ha
 
 Data shape: `movie_name VARCHAR, year INTEGER (nullable), genres VARCHAR, rating DOUBLE (nullable)`. Genres are comma-separated strings. "Date range" is implemented as `start_year`/`end_year` since data only has year.
 
-**Design philosophy:** Senior-level restraint — no dependency bloat. Standard library + DuckDB's native Appender API handles everything. No artificial delays or sleeps anywhere in the codebase.
+**Design philosophy:** Senior-level restraint — no dependency bloat. Standard library + DuckDB's native executemany API handles everything. No artificial delays or sleeps anywhere in the codebase.
 
 ---
 
 ## Tech Stack
 
 - **FastAPI** + **Pydantic** (provided template)
-- **DuckDB** — persistent on-disk analytical DB, out-of-core processing, native Appender for bulk insert
+- **DuckDB** — persistent on-disk analytical DB, out-of-core processing, native executemany for bulk insert
 - **Python stdlib** — `csv.reader` for parsing, `tempfile` for disk streaming, `asyncio.to_thread` for offloading
 - **Python 3.13** (pin `>=3.13,<3.14` — pydantic-core doesn't support 3.14 yet)
 
@@ -100,37 +100,36 @@ This is a **synchronous** function executed off the event loop. No sleeps, no ar
    - This is a fast sequential read — no CSV parsing, just `\n` counting.
    - Store as `total_rows`.
 
-3. **Step 2 — Atomic table replace:**
-   - `DELETE FROM movies` to clear existing data (preserves schema, avoids DROP/CREATE race conditions).
-   - Wrapped in try/except — if table doesn't exist, create it.
+3. **Step 2 — Atomic table replace via staging:**
+   - `DROP TABLE IF EXISTS movies_staging`
+   - `CREATE TABLE movies_staging (movie_name VARCHAR, year INTEGER, genres VARCHAR, rating DOUBLE)`
+   - Ingest all rows into `movies_staging` (steps 3-5 below target this table)
+   - After ingestion completes: `BEGIN TRANSACTION; DROP TABLE IF EXISTS movies; ALTER TABLE movies_staging RENAME TO movies; COMMIT;`
+   - This guarantees queries against `movies` never see partial data — the swap is atomic.
 
-4. **Step 3 — Open DuckDB Appender:**
-   - `appender = conn.appender("movies")`
-   - The Appender is DuckDB's fastest bulk-insert path — bypasses SQL parsing entirely.
-
-5. **Step 4 — Parse and insert with `csv.reader`:**
+4. **Step 3 — Parse and batch insert with `csv.reader` + `executemany`:**
    - Open `temp_path` with `csv.reader(f)`
    - Skip header row (`next(reader)`)
+   - **Validate header** matches expected columns `[movie_name, year, genres, rating]`; if not, set task to error and abort
+   - Accumulate parsed rows into a batch list
    - For each row:
-     - `movie_name = row[0]`
-     - `year = int(row[1]) if row[1] else None`
-     - `genres = row[2]`
-     - `rating = float(row[3]) if row[3] else None`
-     - `appender.append_row(movie_name, year, genres, rating)`
+     - Skip rows with wrong column count
+     - Parse `year` as int (or None), `rating` as float (or None) — skip malformed values
+     - Append tuple `(movie_name, year, genres, rating)` to batch
 
-6. **Step 5 — Progress updates every 50,000 rows:**
-   - Maintain a `rows_done` counter
-   - Every 50,000 rows: call `appender.flush()`, update `tasks[task_id]["progress"] = int(rows_done / total_rows * 100)`
+5. **Step 4 — Progress updates every 50,000 rows:**
+   - Every 50,000 rows: `conn.executemany("INSERT INTO movies_staging VALUES (?, ?, ?, ?)", batch)`, clear batch, update progress
+   - Flush remaining rows after loop ends
    - No sleeps — progress updates happen naturally at the speed of ingestion
 
-7. **Step 6 — Finalize:**
-   - `appender.close()` (flushes remaining rows)
+6. **Step 5 — Finalize:**
+   - Execute atomic swap: `BEGIN TRANSACTION; DROP TABLE IF EXISTS movies; ALTER TABLE movies_staging RENAME TO movies; COMMIT;`
    - `os.unlink(temp_path)` — clean up temp file
    - Set progress → 100, status → `"completed"`
 
 8. **Error handling:**
    - Wrap entire function in `try/except Exception`
-   - On failure: status → `"error"`, error → `str(e)`
+   - On failure: `DROP TABLE IF EXISTS movies_staging` (clean up partial state), status → `"error"`, error → `str(e)`
    - `finally`: ensure `os.unlink(temp_path)` runs regardless
 
 #### `GET /tasks/{task_id}/events` → SSE StreamingResponse
@@ -144,7 +143,8 @@ This is a **synchronous** function executed off the event loop. No sleeps, no ar
 
 #### `GET /movies` → `list[Movie]`
 1. Optional query params: `start_year: int | None = None`, `end_year: int | None = None`, `genre: str | None = None`
-2. Build SQL dynamically:
+2. **Validate**: if both `start_year` and `end_year` provided, check `start_year <= end_year` → `HTTPException(400)` if not
+3. Build SQL dynamically:
    ```sql
    SELECT movie_name, year, genres, rating FROM movies WHERE 1=1
    ```
@@ -186,15 +186,18 @@ This is a **synchronous** function executed off the event loop. No sleeps, no ar
 - **test_download**: GET /datasets/download → decompress gzip, verify CSV content matches
 - **test_task_not_found**: GET /tasks/bad-id/events → 404
 - **test_upload_invalid_file**: Upload malformed content → error state in task
+- **test_query_invalid_year_range**: start_year > end_year → 400
+- **test_upload_bad_headers**: CSV with wrong column names → error state in task
 
 ### 8. `DESIGN.md` — Design Choices
 
 Brief document covering:
-- Why DuckDB (out-of-core analytical engine, zero-config, Appender for O(1) memory bulk insert)
+- Why DuckDB (out-of-core analytical engine, zero-config, executemany for O(1) memory bulk insert)
 - Why stdlib-only for CSV parsing (no dependency bloat, `csv.reader` handles quoted fields correctly, senior-level restraint)
-- Memory management: streaming upload (1MB chunks), Appender (no SQL parsing overhead), streaming download (DuckDB native gzip + chunked file read)
+- Memory management: streaming upload (1MB chunks), executemany (no SQL parsing overhead), streaming download (DuckDB native gzip + chunked file read)
 - SSE design: dict-based task state, real progress from row counts, no artificial delays
-- Atomic data replacement via DELETE + Appender (no partial state visible to queries)
+- Atomic data replacement via staging table + rename (no partial state visible to queries)
+- Two-pass ingestion trade-off: counting lines first doubles file I/O but enables real progress tracking — acceptable because the count pass is a fast sequential scan (no parsing) and OS page cache makes the second pass essentially free
 - Trade-offs: single-process task state (no horizontal scaling), task history not persisted
 
 ---
@@ -207,6 +210,17 @@ Brief document covering:
 uv add duckdb python-multipart
 uv add --dev pytest httpx
 ```
+
+---
+
+## Submission Checklist
+
+- [ ] Working FastAPI application
+- [ ] `DESIGN.md` with design choices explanation
+- [ ] `plan.md` (AI workfile — this plan)
+- [ ] Claude Code conversation/session logs (AI workfiles)
+- [ ] Build/run instructions in README
+- [ ] Package as zipfile for recruiter
 
 ---
 

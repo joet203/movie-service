@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Movie Database Service &mdash; Architecture Plan</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f7f7f7;
+    --surface-hover: #f0f0f2;
+    --border: #e6e6ea;
+    --border-hover: #1863DC;
+    --text: #272C34;
+    --text-muted: #637083;
+    --accent: #1863DC;
+    --accent-light: #e8f0fd;
+    --green: #0f8a3c;
+    --green-light: #e6f5ec;
+    --yellow: #9a6700;
+    --yellow-light: #fff5e0;
+    --purple: #6f42c1;
+    --purple-light: #f3eefa;
+    --dark: #131315;
+    --code-bg: #f4f4f4;
+    --radius: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 3rem 2rem;
+    max-width: 880px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tech-stack {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .tech-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  .tech-badge.primary {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Sections */
+  .section { margin-bottom: 0.75rem; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  .section-header:hover {
+    border-color: var(--accent);
+    box-shadow: 0 1px 4px rgba(24, 99, 220, 0.08);
+  }
+
+  .section-header .chevron {
+    transition: transform 0.2s;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 0.7rem;
+  }
+  .section.open .chevron { transform: rotate(90deg); color: var(--accent); }
+
+  .section-header .req-num {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+  }
+
+  .section-header .title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .section-header .status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .status.covered { background: var(--green-light); color: var(--green); }
+  .status.partial { background: var(--yellow-light); color: var(--yellow); }
+
+  .section-body {
+    display: none;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 1.5rem;
+    background: var(--surface);
+    margin-top: -6px;
+  }
+  .section.open .section-body { display: block; }
+  .section.open .section-header {
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-color: var(--accent);
+    border-bottom-color: var(--border);
+  }
+
+  .section-body h3 {
+    font-size: 0.75rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 1.5rem 0 0.5rem 0;
+    font-weight: 700;
+  }
+  .section-body h3:first-child { margin-top: 0; }
+
+  .section-body p {
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .section-body ul {
+    list-style: none;
+    padding: 0;
+  }
+  .section-body ul li {
+    padding: 0.3rem 0 0.3rem 1.25rem;
+    position: relative;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+  .section-body ul li::before {
+    content: "\25B8";
+    color: var(--accent);
+    position: absolute;
+    left: 0;
+    font-size: 0.75rem;
+    top: 0.4rem;
+  }
+
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.12rem 0.4rem;
+    font-size: 0.82em;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    color: var(--purple);
+  }
+
+  pre {
+    background: var(--dark);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.82rem;
+    margin: 0.75rem 0;
+    color: #e6edf3;
+    line-height: 1.5;
+  }
+
+  .choice-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 0.6rem 0;
+  }
+  .choice-box .choice-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
+    font-weight: 700;
+  }
+  .choice-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 0.88rem;
+  }
+
+  .endpoint {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.88rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .method {
+    font-weight: 700;
+    margin-right: 0.35rem;
+    color: var(--green);
+  }
+
+  /* Subsections */
+  .subsection { margin-top: 0.75rem; }
+  .subsection-toggle {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    padding: 0.4rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .subsection-toggle:hover { color: var(--accent); }
+  .subsection-toggle .sub-chevron {
+    transition: transform 0.2s;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+  }
+  .subsection.open .sub-chevron { transform: rotate(90deg); color: var(--accent); }
+  .subsection-content {
+    display: none;
+    padding-left: 1rem;
+    border-left: 2px solid var(--border);
+    margin-left: 0.25rem;
+    margin-top: 0.5rem;
+  }
+  .subsection.open .subsection-content { display: block; }
+
+  .flow-step {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin: 0.4rem 0;
+  }
+  .flow-step .step-num {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.7rem;
+    border-radius: 50%;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .flow-step .step-text { font-size: 0.88rem; color: var(--text); }
+
+  .tradeoff {
+    background: var(--yellow-light);
+    border: 1px solid rgba(154, 103, 0, 0.15);
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    margin: 0.6rem 0;
+    font-size: 0.85rem;
+    color: var(--yellow);
+  }
+
+  /* Future section */
+  .future-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  @media (max-width: 640px) { .future-grid { grid-template-columns: 1fr; } }
+  .future-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .future-card h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.35rem;
+  }
+  .future-card p {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+  .future-card .tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.45rem;
+    border-radius: 3px;
+    margin-bottom: 0.5rem;
+  }
+  .tag.perf { background: var(--accent-light); color: var(--accent); }
+  .tag.feat { background: var(--green-light); color: var(--green); }
+  .tag.scale { background: var(--purple-light); color: var(--purple); }
+  .tag.data { background: var(--yellow-light); color: var(--yellow); }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .expand-all {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.4rem 0.9rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-bottom: 1.25rem;
+    transition: all 0.15s;
+  }
+  .expand-all:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+  }
+</style>
+</head>
+<body>
+
+<h1>Movie Database <span>Service</span></h1>
+<p class="subtitle">FastAPI + DuckDB &mdash; Architecture Plan & Requirements Coverage</p>
+
+<div class="tech-stack">
+  <span class="tech-badge primary">FastAPI</span>
+  <span class="tech-badge primary">DuckDB</span>
+  <span class="tech-badge">Pydantic</span>
+  <span class="tech-badge">Python 3.13 stdlib</span>
+  <span class="tech-badge">csv.reader</span>
+  <span class="tech-badge">asyncio.to_thread</span>
+  <span class="tech-badge">uv</span>
+</div>
+
+<button class="expand-all" onclick="toggleAll()">Expand / Collapse All</button>
+
+<!-- REQ 1: CSV INPUT -->
+<div class="section" id="req1">
+  <button class="section-header" onclick="toggle('req1')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">REQ 1</span>
+    <span class="title">Input a movie database CSV</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <p>Upload endpoint accepts the CSV file and ingests it into DuckDB via a background task.</p>
+
+    <h3>Endpoint</h3>
+    <p class="endpoint"><span class="method">POST</span>/datasets</p>
+    <p>Returns <code>202 Accepted</code> with a <code>task_id</code> for progress tracking.</p>
+
+    <h3>How It Works</h3>
+    <div class="flow-step"><span class="step-num">1</span><span class="step-text">Stream <code>UploadFile</code> to a temp file in <strong>1 MB chunks</strong> &mdash; the full file is never held in memory.</span></div>
+    <div class="flow-step"><span class="step-num">2</span><span class="step-text">Generate a UUID <code>task_id</code>, store it in the in-memory task tracker, return <code>202</code> immediately.</span></div>
+    <div class="flow-step"><span class="step-num">3</span><span class="step-text">Background task runs via <code>asyncio.to_thread</code> (non-blocking to the event loop).</span></div>
+    <div class="flow-step"><span class="step-num">4</span><span class="step-text">Fast line-count pass over the temp file for progress denominator (no parsing, just <code>\n</code> counting).</span></div>
+    <div class="flow-step"><span class="step-num">5</span><span class="step-text">Parse rows with stdlib <code>csv.reader</code>. Validate headers. Skip malformed rows gracefully.</span></div>
+    <div class="flow-step"><span class="step-num">6</span><span class="step-text">Batch insert via <code>executemany</code> into a staging table. Flush + update progress every 50K rows.</span></div>
+    <div class="flow-step"><span class="step-num">7</span><span class="step-text">Atomic swap: <code>DROP movies; ALTER TABLE movies_staging RENAME TO movies;</code> inside a transaction.</span></div>
+    <div class="flow-step"><span class="step-num">8</span><span class="step-text">Clean up temp file. Mark task as completed.</span></div>
+
+    <div class="subsection" id="req1-choices">
+      <div class="subsection-toggle" onclick="toggleSub('req1-choices')">
+        <span class="sub-chevron">&#9654;</span> Design Choices
+      </div>
+      <div class="subsection-content">
+        <div class="choice-box">
+          <div class="choice-label">Why DuckDB executemany over read_csv?</div>
+          <p>Batched <code>executemany</code> with parameterized INSERT flushes 50K rows at a time, keeping memory bounded. Using <code>read_csv</code> would be a single blocking call with no way to report intermediate progress.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why stdlib csv.reader over Polars/pandas?</div>
+          <p>Zero extra dependencies. <code>csv.reader</code> correctly handles quoted fields (like comma-separated genres) and streams row-by-row. Polars/pandas would add significant dependency weight for no real benefit here.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why staging table + atomic rename?</div>
+          <p>During ingestion, queries against <code>movies</code> continue to work with the old data. The swap is a single transaction &mdash; no partial state is ever visible to readers.</p>
+        </div>
+        <div class="tradeoff">Trade-off: Two-pass file I/O (count then parse) doubles disk reads, but the first pass is a fast sequential scan with no parsing, and the OS page cache makes the second pass essentially free.</div>
+      </div>
+    </div>
+
+    <div class="subsection" id="req1-errors">
+      <div class="subsection-toggle" onclick="toggleSub('req1-errors')">
+        <span class="sub-chevron">&#9654;</span> Error Handling
+      </div>
+      <div class="subsection-content">
+        <ul>
+          <li>Invalid CSV headers &rarr; task set to <code>"error"</code> with descriptive message</li>
+          <li>Rows with wrong column count &rarr; skipped (counted)</li>
+          <li>Unparseable year/rating values &rarr; skipped gracefully</li>
+          <li>Any exception &rarr; staging table dropped, temp file cleaned up, task marked as error</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="subsection" id="req1-null">
+      <div class="subsection-toggle" onclick="toggleSub('req1-null')">
+        <span class="sub-chevron">&#9654;</span> Null Value Handling
+      </div>
+      <div class="subsection-content">
+        <p>Empty strings for <code>year</code> and <code>rating</code> are passed as <code>None</code> to DuckDB, stored as SQL <code>NULL</code>. Data fidelity is preserved &mdash; no coercion to 0 or default values.</p>
+        <pre>year = int(row[1]) if row[1].strip() else None
+rating = float(row[3]) if row[3].strip() else None</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REQ 2: GZIP DOWNLOAD -->
+<div class="section" id="req2">
+  <button class="section-header" onclick="toggle('req2')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">REQ 2</span>
+    <span class="title">Download whole database as gzipped CSV</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <h3>Endpoint</h3>
+    <p class="endpoint"><span class="method">GET</span>/datasets/download</p>
+
+    <h3>How It Works</h3>
+    <div class="flow-step"><span class="step-num">1</span><span class="step-text">Check table has data via <code>SELECT COUNT(*)</code>. If empty &rarr; <code>404</code>.</span></div>
+    <div class="flow-step"><span class="step-num">2</span><span class="step-text">DuckDB writes directly to a temp <code>.csv.gz</code> file:<br><code>COPY movies TO '&lt;path&gt;.csv.gz' (FORMAT CSV, HEADER, COMPRESSION 'gzip')</code></span></div>
+    <div class="flow-step"><span class="step-num">3</span><span class="step-text">Stream the compressed file to the client in <strong>64 KB chunks</strong> via <code>StreamingResponse</code>.</span></div>
+    <div class="flow-step"><span class="step-num">4</span><span class="step-text">Temp file cleaned up in the generator's <code>finally</code> block after streaming completes.</span></div>
+
+    <h3>Response Headers</h3>
+    <ul>
+      <li><code>Content-Type: application/gzip</code></li>
+      <li><code>Content-Disposition: attachment; filename="movies.csv.gz"</code></li>
+    </ul>
+
+    <div class="subsection" id="req2-choices">
+      <div class="subsection-toggle" onclick="toggleSub('req2-choices')">
+        <span class="sub-chevron">&#9654;</span> Design Choices
+      </div>
+      <div class="subsection-content">
+        <div class="choice-box">
+          <div class="choice-label">Why DuckDB native COPY with COMPRESSION?</div>
+          <p>DuckDB handles CSV formatting and gzip compression in a single optimized pass. No Python-side row iteration, no manual gzip &mdash; the entire export is handled by DuckDB's native engine at C++ speed.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why stream from temp file instead of piping?</div>
+          <p>DuckDB's COPY writes to a file path. By streaming that file in 64 KB chunks, we never load the full compressed output into memory. The temp file is deleted immediately after streaming.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REQ 3: QUERY -->
+<div class="section" id="req3">
+  <button class="section-header" onclick="toggle('req3')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">REQ 3</span>
+    <span class="title">Query by date range and genre</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <h3>Endpoint</h3>
+    <p class="endpoint"><span class="method">GET</span>/movies?start_year=&amp;end_year=&amp;genre=</p>
+    <p>All parameters are optional. Returns a JSON list of matching movies.</p>
+
+    <h3>Parameters</h3>
+    <ul>
+      <li><code>start_year</code> (int, optional) &mdash; inclusive lower bound on year</li>
+      <li><code>end_year</code> (int, optional) &mdash; inclusive upper bound on year</li>
+      <li><code>genre</code> (str, optional) &mdash; substring match against the genres field</li>
+    </ul>
+
+    <h3>Query Construction</h3>
+    <pre>SELECT movie_name, year, genres, rating
+FROM movies
+WHERE 1=1
+  AND year >= $start_year   -- if provided
+  AND year <= $end_year     -- if provided
+  AND genres LIKE '%Action%' -- if provided</pre>
+    <p>All filters use <strong>parameterized queries</strong> &mdash; no string interpolation, no SQL injection risk.</p>
+
+    <h3>Validation</h3>
+    <ul>
+      <li>If both <code>start_year</code> and <code>end_year</code> provided: validates <code>start_year &le; end_year</code> &rarr; <code>400</code> if not</li>
+      <li>No filters &rarr; returns all movies</li>
+    </ul>
+
+    <div class="subsection" id="req3-choices">
+      <div class="subsection-toggle" onclick="toggleSub('req3-choices')">
+        <span class="sub-chevron">&#9654;</span> Design Choices
+      </div>
+      <div class="subsection-content">
+        <div class="choice-box">
+          <div class="choice-label">Why "year" instead of "date"?</div>
+          <p>The CSV data only has a <code>year</code> column, not a full date. Implementing <code>start_year</code>/<code>end_year</code> is the honest interpretation. This is documented in DESIGN.md.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why LIKE for genre matching?</div>
+          <p>Genres are stored as a single comma-separated string (e.g., <code>"Action, Crime, Drama"</code>). <code>LIKE '%Action%'</code> provides simple substring matching without requiring schema normalization. DuckDB pushes the filter down to the scan layer for efficiency.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why not normalize genres into a separate table?</div>
+          <p>DuckDB is an OLAP/columnar engine where denormalized data is idiomatic. A genre junction table would add join complexity for every query with no performance benefit &mdash; DuckDB's scan-layer <code>LIKE</code> filter is already efficient on columnar data. Normalization is an OLTP pattern that doesn't suit this use case.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why single genre filter (not multi)?</div>
+          <p>Keeps the API surface simple and matches the original template's model. The <code>LIKE</code> pattern could be extended to multiple genres if needed, but for this assessment single-genre filtering is sufficient and clean.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REQ 4: PROGRESS UPDATES -->
+<div class="section" id="req4">
+  <button class="section-header" onclick="toggle('req4')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">REQ 4</span>
+    <span class="title">Progress updates for long-running requests (&gt;2s)</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <p>The requirement: <em>"Provide progress updates for long running requests &gt; 2 seconds."</em> This means: if a request takes longer than 2 seconds, the client should be able to get progress updates. Our async task + SSE pattern satisfies this.</p>
+
+    <h3>Endpoint</h3>
+    <p class="endpoint"><span class="method">GET</span>/tasks/{task_id}/events</p>
+    <p>Server-Sent Events stream. Connect after receiving a <code>task_id</code> from <code>POST /datasets</code>.</p>
+
+    <h3>How It Works</h3>
+    <div class="flow-step"><span class="step-num">1</span><span class="step-text"><code>POST /datasets</code> returns <code>202</code> immediately with a <code>task_id</code> &mdash; the client is never left waiting.</span></div>
+    <div class="flow-step"><span class="step-num">2</span><span class="step-text">Client opens an SSE connection to <code>/tasks/{task_id}/events</code>.</span></div>
+    <div class="flow-step"><span class="step-num">3</span><span class="step-text">Server yields events with real progress percentages as the background task processes rows.</span></div>
+    <div class="flow-step"><span class="step-num">4</span><span class="step-text">Events include: <code>status</code> (pending/processing/completed/error), <code>progress</code> (0-100), <code>error</code> (if any).</span></div>
+    <div class="flow-step"><span class="step-num">5</span><span class="step-text">Stream ends when status reaches <code>"completed"</code> or <code>"error"</code>.</span></div>
+
+    <h3>Event Format</h3>
+    <pre>data: {"status": "processing", "progress": 45, "error": null}
+
+data: {"status": "completed", "progress": 100, "error": null}</pre>
+
+    <div class="subsection" id="req4-choices">
+      <div class="subsection-toggle" onclick="toggleSub('req4-choices')">
+        <span class="sub-chevron">&#9654;</span> Design Choices
+      </div>
+      <div class="subsection-content">
+        <div class="choice-box">
+          <div class="choice-label">Why SSE over WebSockets?</div>
+          <p>SSE is simpler, unidirectional (server &rarr; client), and built on standard HTTP. Perfect for progress reporting where the client only needs to receive updates. No handshake complexity.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why real progress, not simulated?</div>
+          <p>The background task counts total rows first, then reports actual <code>rows_done / total_rows</code>. The progress percentage reflects real ingestion state &mdash; no estimation or faking.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why in-memory task dict?</div>
+          <p>Single-process FastAPI &mdash; a dict is the simplest correct solution. No Redis or database needed. The dict is shared between the background thread and SSE generator via Python's GIL-safe dict operations.</p>
+        </div>
+        <div class="choice-box">
+          <div class="choice-label">Why asyncio.sleep(0.5) in the poll loop?</div>
+          <p>This is NOT an artificial delay. It's the standard SSE pattern to avoid busy-waiting. The async sleep yields control back to the event loop, allowing other requests to be served. Events are only emitted when progress has actually changed.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PERFORMANCE -->
+<div class="section" id="perf">
+  <button class="section-header" onclick="toggle('perf')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">PERF</span>
+    <span class="title">Performance, CPU & Memory Efficiency</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <p>The service is graded on <em>"overall performance and responsiveness, efficient management of CPU and memory."</em></p>
+
+    <h3>Memory Management</h3>
+    <ul>
+      <li><strong>Upload:</strong> Streamed to disk in 1 MB chunks. Never loaded into memory.</li>
+      <li><strong>Ingestion:</strong> <code>csv.reader</code> streams row-by-row. <code>executemany</code> flushes every 50K rows. O(1) memory per row.</li>
+      <li><strong>Queries:</strong> DuckDB pushes filters down to scan layer. Only matching rows are materialized.</li>
+      <li><strong>Download:</strong> DuckDB writes compressed file natively. Streamed to client in 64 KB chunks.</li>
+    </ul>
+
+    <h3>CPU Efficiency</h3>
+    <ul>
+      <li><strong>DuckDB executemany:</strong> Batched parameterized INSERT in 50K-row chunks for bounded-memory bulk insert.</li>
+      <li><strong>asyncio.to_thread:</strong> Offloads blocking DuckDB/CSV work to a thread pool, keeping the event loop responsive.</li>
+      <li><strong>Native gzip:</strong> DuckDB handles compression in C++ &mdash; no Python-side gzip overhead.</li>
+    </ul>
+
+    <h3>Responsiveness</h3>
+    <ul>
+      <li>Upload returns <code>202</code> immediately &mdash; no blocking on ingestion.</li>
+      <li>Event loop never blocked &mdash; all heavy work runs in background threads.</li>
+      <li>SSE provides real-time progress during long operations.</li>
+    </ul>
+
+    <div class="subsection" id="perf-duckdb">
+      <div class="subsection-toggle" onclick="toggleSub('perf-duckdb')">
+        <span class="sub-chevron">&#9654;</span> Why DuckDB?
+      </div>
+      <div class="subsection-content">
+        <ul>
+          <li><strong>Out-of-core processing:</strong> DuckDB automatically spills to disk when data exceeds available RAM. Works with datasets far larger than memory.</li>
+          <li><strong>Columnar storage:</strong> Analytical queries (filters, aggregations) are inherently faster with columnar layout.</li>
+          <li><strong>Zero-config:</strong> Embedded database, no separate server process. Single file on disk.</li>
+          <li><strong>ACID transactions:</strong> Enables the atomic staging table swap pattern.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ERROR HANDLING -->
+<div class="section" id="errors">
+  <button class="section-header" onclick="toggle('errors')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">ERR</span>
+    <span class="title">Graceful Error Handling</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <p>The service is graded on <em>"graceful error handling."</em></p>
+
+    <h3>HTTP Error Responses</h3>
+    <ul>
+      <li><code>400</code> &mdash; Invalid query params (e.g., <code>start_year &gt; end_year</code>)</li>
+      <li><code>404</code> &mdash; Unknown <code>task_id</code> in SSE endpoint</li>
+      <li><code>404</code> &mdash; Download with no data in database</li>
+    </ul>
+
+    <h3>Ingestion Error Handling</h3>
+    <ul>
+      <li>Invalid CSV headers &rarr; task marked <code>"error"</code> with message, staging table dropped</li>
+      <li>Wrong column count in a row &rarr; row skipped</li>
+      <li>Unparseable year/rating &rarr; row skipped</li>
+      <li>Any unhandled exception &rarr; staging table dropped, temp file cleaned, task set to error</li>
+      <li>Old <code>movies</code> table preserved if ingestion fails &mdash; no data loss</li>
+    </ul>
+
+    <h3>Resource Cleanup</h3>
+    <ul>
+      <li>Temp files always cleaned up via <code>finally</code> blocks</li>
+      <li>Staging tables dropped on failure</li>
+      <li>DuckDB connection closed on app shutdown via lifespan handler</li>
+    </ul>
+  </div>
+</div>
+
+<!-- PROJECT STRUCTURE -->
+<div class="section" id="structure">
+  <button class="section-header" onclick="toggle('structure')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">ARCH</span>
+    <span class="title">Project Structure & Files</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <pre>main.py                  # FastAPI app, lifespan, router registration
+app/
+  __init__.py            # (empty)
+  db.py                  # DuckDB connection singleton + task state dict
+  model.py               # Pydantic response models
+  movies.py              # All route handlers + background ingestion
+tests/
+  __init__.py            # (empty)
+  conftest.py            # pytest fixtures: in-memory DuckDB, test client
+  test_movies.py         # Full test suite (13 tests)
+DESIGN.md                # Design choices explanation
+plan.md                  # This architecture plan (AI workfile)
+plan.html                # Interactive requirements coverage (AI workfile)</pre>
+
+    <h3>Module Responsibilities</h3>
+    <ul>
+      <li><code>main.py</code> &mdash; App creation, lifespan (DB init/shutdown), router registration</li>
+      <li><code>app/db.py</code> &mdash; DuckDB connection singleton, <code>init_db()</code>, <code>get_db()</code>, <code>close_db()</code>, shared <code>tasks</code> dict</li>
+      <li><code>app/model.py</code> &mdash; Pydantic models: <code>Movie</code>, <code>TaskResponse</code>, <code>TaskStatus</code>, <code>HealthResponse</code></li>
+      <li><code>app/movies.py</code> &mdash; All 5 route handlers + <code>_ingest_csv</code> background function</li>
+    </ul>
+  </div>
+</div>
+
+<!-- TESTS -->
+<div class="section" id="tests">
+  <button class="section-header" onclick="toggle('tests')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">TEST</span>
+    <span class="title">Test Suite</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <p>Full test suite using <code>pytest</code> + <code>httpx</code> with an in-memory DuckDB override for isolation.</p>
+
+    <h3>Tests</h3>
+    <ul>
+      <li><code>test_health</code> &mdash; GET /health returns 200</li>
+      <li><code>test_upload_csv</code> &mdash; POST /datasets returns 202 + task_id</li>
+      <li><code>test_upload_and_poll</code> &mdash; Upload then SSE poll until 100%</li>
+      <li><code>test_query_no_filters</code> &mdash; GET /movies returns all rows</li>
+      <li><code>test_query_by_year_range</code> &mdash; Year range filtering works</li>
+      <li><code>test_query_by_genre</code> &mdash; Genre substring matching works</li>
+      <li><code>test_query_combined</code> &mdash; Year + genre together</li>
+      <li><code>test_query_empty_result</code> &mdash; No matches returns empty list</li>
+      <li><code>test_download</code> &mdash; Gzip download, decompress, verify</li>
+      <li><code>test_task_not_found</code> &mdash; Unknown task_id returns 404</li>
+      <li><code>test_upload_invalid_file</code> &mdash; Malformed CSV sets error state</li>
+      <li><code>test_query_invalid_year_range</code> &mdash; start &gt; end returns 400</li>
+      <li><code>test_upload_bad_headers</code> &mdash; Wrong columns sets error state</li>
+    </ul>
+  </div>
+</div>
+
+<!-- DELIVERABLES -->
+<div class="section" id="deliverables">
+  <button class="section-header" onclick="toggle('deliverables')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">SHIP</span>
+    <span class="title">Deliverables & Submission</span>
+    <span class="status covered">Covered</span>
+  </button>
+  <div class="section-body">
+    <h3>Submission Checklist</h3>
+    <ul>
+      <li>Working FastAPI application</li>
+      <li><code>DESIGN.md</code> &mdash; design choices explanation</li>
+      <li><code>plan.md</code> + <code>plan.html</code> &mdash; AI workfiles (architecture plan)</li>
+      <li>Claude Code session logs &mdash; AI workfiles</li>
+      <li>Build/run instructions in README</li>
+      <li>Full test suite</li>
+      <li>Packaged as zipfile</li>
+    </ul>
+
+    <h3>How to Run</h3>
+    <pre>uv sync
+uv run fastapi dev main.py
+# Swagger UI: http://localhost:8000/docs</pre>
+
+    <h3>How to Test</h3>
+    <pre>uv run pytest tests/ -v</pre>
+  </div>
+</div>
+
+<!-- FUTURE CONSIDERATIONS -->
+<div class="section" id="future">
+  <button class="section-header" onclick="toggle('future')">
+    <span class="chevron">&#9654;</span>
+    <span class="req-num">NEXT</span>
+    <span class="title">Future Considerations & Improvements</span>
+    <span class="status partial">Roadmap</span>
+  </button>
+  <div class="section-body">
+    <p>Improvements that would make sense for a production deployment but are out of scope for this assessment.</p>
+
+    <div class="future-grid">
+      <div class="future-card">
+        <span class="tag data">Data Quality</span>
+        <h4>Genre Normalization</h4>
+        <p>Currently genres are stored as a comma-separated string and matched with <code>LIKE</code>. A normalized junction table would enable exact genre matching (avoiding theoretical false positives like "Drama" matching "Melodrama") and support efficient multi-genre AND/OR queries. Skipped here because DuckDB is an OLAP engine where denormalized data is idiomatic.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag feat">Feature</span>
+        <h4>Multi-Genre Filtering</h4>
+        <p>Support querying by multiple genres simultaneously (e.g., <code>?genre=Action&amp;genre=Drama</code>) with AND/OR semantics. The current single-genre <code>LIKE</code> filter is simple and clean, but multi-genre support would be a natural extension.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag scale">Scale</span>
+        <h4>Persistent Task State</h4>
+        <p>Task progress is stored in an in-memory dict &mdash; lost on restart. For production, store task state in DuckDB itself or Redis. Would also enable horizontal scaling across multiple workers.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag scale">Scale</span>
+        <h4>Concurrent Upload Handling</h4>
+        <p>Currently, simultaneous uploads both try to swap the <code>movies</code> table. A queue or lock mechanism would serialize uploads, or each upload could target a versioned table with a pointer swap.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag perf">Performance</span>
+        <h4>Query Pagination</h4>
+        <p>The <code>GET /movies</code> endpoint returns all matching results. For very large result sets, adding <code>limit</code>/<code>offset</code> or cursor-based pagination would reduce response size and memory usage.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag perf">Performance</span>
+        <h4>DuckDB Indexing</h4>
+        <p>For frequently filtered columns like <code>year</code>, DuckDB's min-max indexes (zonemap) already help. Explicit indexing or partitioning by year could further improve scan performance at scale.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag feat">Feature</span>
+        <h4>Sorting & Filtering by Rating</h4>
+        <p>The API currently doesn't expose rating as a filter or sort parameter. Adding <code>min_rating</code>, <code>sort_by=rating</code> would be natural extensions.</p>
+      </div>
+      <div class="future-card">
+        <span class="tag data">Data Quality</span>
+        <h4>Schema Flexibility</h4>
+        <p>The ingestion pipeline validates against a fixed 4-column schema. Supporting configurable column mappings or auto-detecting CSV schemas would handle more varied data sources.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Movie Database Service assessment &mdash; built with Claude Code
+</footer>
+
+<script>
+function toggle(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleSub(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleAll() {
+  const sections = document.querySelectorAll('.section, .subsection');
+  const anyOpen = [...sections].some(s => s.classList.contains('open'));
+  sections.forEach(s => {
+    if (anyOpen) s.classList.remove('open');
+    else s.classList.add('open');
+  });
+}
+</script>
+</body>
+</html>

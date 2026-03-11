@@ -171,11 +171,66 @@ class TestDownload:
         resp = client.get("/datasets/download")
         assert resp.status_code == 404
 
+    def test_download_auto_async_when_slow(self, client, populated_db, monkeypatch):
+        original_run_export = movies._run_export
+
+        def slow_run_export(*args, **kwargs):
+            time.sleep(0.05)
+            return original_run_export(*args, **kwargs)
+
+        monkeypatch.setattr(movies, "_run_export", slow_run_export)
+        monkeypatch.setattr(movies, "SSE_DOWNLOAD_THRESHOLD", 0.001)
+
+        resp = client.get("/datasets/download")
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+
+        # Poll until artifact is ready, then download through task endpoint.
+        for _ in range(20):
+            rr = client.get(f"/tasks/{task_id}/download")
+            if rr.status_code == 200:
+                break
+            assert rr.status_code == 409
+            time.sleep(0.01)
+
+        assert rr.status_code == 200
+        csv_text = gzip.decompress(rr.content).decode("utf-8")
+        lines = csv_text.strip().split("\n")
+        assert lines[0] == "movie_name,year,genres,rating"
+        assert len(lines) == 7
+
 
 class TestTasks:
     def test_task_results_not_found(self, client):
         resp = client.get("/tasks/fake-id/results")
         assert resp.status_code == 404
+
+    def test_task_download_not_found(self, client):
+        resp = client.get("/tasks/fake-id/download")
+        assert resp.status_code == 404
+
+    def test_task_download_no_artifact_for_non_export_task(self, client, populated_db):
+        # Query task has JSON rows, not a downloadable gzip artifact.
+        resp = client.get("/movies")
+        assert resp.status_code == 200
+        assert len(resp.json()) > 0
+
+        # Upload a dataset to create another completed non-export task.
+        upload = client.post(
+            "/datasets",
+            files={
+                "file": (
+                    "movies.csv",
+                    io.BytesIO(
+                        b"movie_name,year,genres,rating\nFoo,2020,Action,8.1\n"
+                    ),
+                    "text/csv",
+                )
+            },
+        )
+        task_id = upload.json()["task_id"]
+        rr = client.get(f"/tasks/{task_id}/download")
+        assert rr.status_code == 404
 
     def test_task_pruning_keeps_registry_bounded(
         self, client, populated_db, csv_file, monkeypatch

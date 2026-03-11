@@ -26,6 +26,7 @@ MAX_UPLOAD_BYTES = 10_000_000_000  # 10 GB upload limit
 DEFAULT_QUERY_LIMIT = 1000
 MAX_QUERY_LIMIT = 10_000
 SSE_QUERY_THRESHOLD = 2.0  # seconds
+SSE_DOWNLOAD_THRESHOLD = 2.0  # seconds
 TASK_TTL_SECONDS = 15 * 60
 TASK_MAX_COUNT = 500
 TERMINAL_STATES = {"completed", "error"}
@@ -35,7 +36,12 @@ VALID_SORT_COLUMNS = {"movie_name", "year", "genres", "rating"}
 def _sanitize_error(e: Exception) -> str:
     """Return a safe error message — expose CSV format issues, hide internals."""
     msg = str(e)
-    if "header" in msg.lower() or "csv" in msg.lower() or "empty" in msg.lower():
+    if (
+        "header" in msg.lower()
+        or "csv" in msg.lower()
+        or "empty" in msg.lower()
+        or "no data" in msg.lower()
+    ):
         return msg
     return "Operation failed — check input and try again"
 
@@ -75,11 +81,31 @@ def _build_where_clause(
 
 
 def _new_task_id() -> str:
-    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    _prune_tasks()
     task_id = str(uuid4())
     db.create_task(task_id)
-    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    _prune_tasks()
     return task_id
+
+
+def _cleanup_task_artifacts(task: dict | None) -> None:
+    if task is None:
+        return
+    result = task.get("result")
+    if not isinstance(result, dict):
+        return
+    export_path = result.get("export_path")
+    if isinstance(export_path, str):
+        try:
+            os.unlink(export_path)
+        except OSError:
+            pass
+
+
+def _prune_tasks() -> None:
+    removed = db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    for task in removed:
+        _cleanup_task_artifacts(task)
 
 
 def _execute_query(
@@ -156,6 +182,42 @@ def _run_query(
     except Exception as e:
         logger.exception("Query failed for task %s", task_id)
         db.set_task(task_id, status="error", progress=100, error=_sanitize_error(e))
+
+
+def _run_export(task_id: str) -> None:
+    """Build gzip export in background and attach path to task result."""
+    db.set_task(task_id, status="processing", progress=5, error=None)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv.gz")
+    tmp_path = tmp.name
+    tmp.close()
+    conn = db.get_db()
+
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
+        if count == 0:
+            raise ValueError("No data available for download")
+
+        db.set_task(task_id, progress=25)
+        conn.execute(
+            f"COPY movies TO '{tmp_path}' (FORMAT CSV, HEADER, COMPRESSION 'gzip')"
+        )
+        db.set_task(task_id, progress=90)
+        db.set_task(
+            task_id,
+            status="completed",
+            progress=100,
+            result={"export_path": tmp_path},
+            error=None,
+        )
+    except Exception as e:
+        logger.exception("Export failed for task %s", task_id)
+        db.set_task(task_id, status="error", progress=100, error=_sanitize_error(e))
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +346,7 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
 
 @router.get("/tasks/{task_id}/events")
 async def task_events(task_id: str) -> StreamingResponse:
-    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    _prune_tasks()
     if not db.task_exists(task_id):
         raise HTTPException(status_code=404, detail="Task not found")
     return StreamingResponse(
@@ -362,22 +424,22 @@ async def query_movies(
     if completed is None:
         raise HTTPException(status_code=500, detail="Query task missing")
     if completed["status"] == "error":
-        db.delete_task(task_id)
+        _cleanup_task_artifacts(db.delete_task(task_id))
         raise HTTPException(status_code=500, detail=completed.get("error"))
 
     result = completed.get("result")
     if result is None:
-        db.delete_task(task_id)
+        _cleanup_task_artifacts(db.delete_task(task_id))
         raise HTTPException(status_code=500, detail="No query result available")
 
     response.headers["X-Total-Count"] = str(result["total"])
-    db.delete_task(task_id)
+    _cleanup_task_artifacts(db.delete_task(task_id))
     return [Movie(**row) for row in result["movies"]]
 
 
 @router.get("/tasks/{task_id}/results")
 def get_task_results(task_id: str, response: Response):
-    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    _prune_tasks()
     task = db.get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -402,29 +464,61 @@ def get_task_results(task_id: str, response: Response):
 
 @router.get("/datasets/download")
 async def download_dataset() -> StreamingResponse:
-    conn = db.get_db()
+    # Same threshold pattern as /movies:
+    # return direct payload for quick exports, task flow for slow exports.
+    task_id = _new_task_id()
+    task = asyncio.create_task(asyncio.to_thread(_run_export, task_id))
     try:
-        count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
-        if count == 0:
-            raise HTTPException(status_code=404, detail="No data available for download")
+        await asyncio.wait_for(asyncio.shield(task), timeout=SSE_DOWNLOAD_THRESHOLD)
+    except asyncio.TimeoutError:
+        return JSONResponse(status_code=202, content={"task_id": task_id})
 
-        # DuckDB writes gzip-compressed CSV natively — efficient C++ path
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv.gz")
-        tmp.close()
-        conn.execute(
-            f"COPY movies TO '{tmp.name}' (FORMAT CSV, HEADER, COMPRESSION 'gzip')"
-        )
-    finally:
-        conn.close()
+    completed = db.get_task(task_id)
+    if completed is None:
+        raise HTTPException(status_code=500, detail="Export task missing")
+    if completed["status"] == "error":
+        detail = completed.get("error") or "Export failed"
+        _cleanup_task_artifacts(db.delete_task(task_id))
+        if detail == "No data available for download":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=500, detail=detail)
+
+    result = completed.get("result")
+    if not isinstance(result, dict) or "export_path" not in result:
+        _cleanup_task_artifacts(db.delete_task(task_id))
+        raise HTTPException(status_code=500, detail="Export artifact missing")
 
     return StreamingResponse(
-        _file_streamer(tmp.name),
+        _file_streamer(result["export_path"], task_id=task_id),
         media_type="application/gzip",
         headers={"Content-Disposition": 'attachment; filename="movies.csv.gz"'},
     )
 
 
-def _file_streamer(path: str):
+@router.get("/tasks/{task_id}/download")
+def download_task_file(task_id: str) -> StreamingResponse:
+    _prune_tasks()
+    task = db.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task["status"] != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Task is {task['status']}, not completed",
+        )
+
+    result = task.get("result")
+    if not isinstance(result, dict) or "export_path" not in result:
+        raise HTTPException(status_code=404, detail="No download artifact available")
+
+    return StreamingResponse(
+        _file_streamer(result["export_path"], task_id=task_id),
+        media_type="application/gzip",
+        headers={"Content-Disposition": 'attachment; filename="movies.csv.gz"'},
+    )
+
+
+def _file_streamer(path: str, task_id: str | None = None):
     """Yield file in chunks, then delete it."""
     try:
         with open(path, "rb") as f:
@@ -435,3 +529,5 @@ def _file_streamer(path: str):
             os.unlink(path)
         except OSError:
             pass
+        if task_id is not None:
+            _cleanup_task_artifacts(db.delete_task(task_id))

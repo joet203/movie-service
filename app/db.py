@@ -81,13 +81,14 @@ def task_exists(task_id: str) -> bool:
         return task_id in tasks
 
 
-def delete_task(task_id: str) -> None:
+def delete_task(task_id: str) -> dict[str, Any] | None:
     with _tasks_lock:
-        tasks.pop(task_id, None)
+        return tasks.pop(task_id, None)
 
 
-def prune_tasks(max_tasks: int, ttl_seconds: float) -> None:
+def prune_tasks(max_tasks: int, ttl_seconds: float) -> list[dict[str, Any]]:
     now = time.monotonic()
+    removed: list[dict[str, Any]] = []
     with _tasks_lock:
         expired = [
             task_id
@@ -96,10 +97,12 @@ def prune_tasks(max_tasks: int, ttl_seconds: float) -> None:
             and now - float(task.get("updated_at", now)) > ttl_seconds
         ]
         for task_id in expired:
-            tasks.pop(task_id, None)
+            task = tasks.pop(task_id, None)
+            if task is not None:
+                removed.append(task)
 
         if len(tasks) <= max_tasks:
-            return
+            return removed
 
         done_items = sorted(
             (
@@ -111,4 +114,7 @@ def prune_tasks(max_tasks: int, ttl_seconds: float) -> None:
         )
         while len(tasks) > max_tasks and done_items:
             task_id, _ = done_items.pop(0)
-            tasks.pop(task_id, None)
+            task = tasks.pop(task_id, None)
+            if task is not None:
+                removed.append(task)
+    return removed

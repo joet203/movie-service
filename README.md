@@ -70,3 +70,6 @@ Go to `localhost:8000/docs` for the `Swagger` UI
   - Returns `202` with `task_id` when query exceeds ~2 seconds
 - `GET /tasks/{task_id}/results` — fetch rows for a completed long-running query
 - `GET /datasets/download` — download full dataset as `movies.csv.gz`
+  - Returns `200` with gzip bytes when export finishes quickly
+  - Returns `202` with `task_id` when export exceeds ~2 seconds
+- `GET /tasks/{task_id}/download` — fetch gzip artifact for a completed long-running export

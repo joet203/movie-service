@@ -474,7 +474,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
   <div class="section-head fade-in">
     <span class="section-tag">Benchmarks</span>
     <h2>Performance &amp; Profiling</h2>
-    <p>Measured on Apple M1 with 367,314 rows (15.8 MB CSV). DuckDB native ingestion, Python 3.13.</p>
+    <p>Measured on Apple M4 with 367,314 rows (15.8 MB CSV). DuckDB native ingestion, Python 3.13.</p>
   </div>
   <div class="stat-grid fade-in fade-in-d1">
     <div class="stat-card">
@@ -742,7 +742,7 @@ async function checkHealth() {
   } catch { b.dataset.status = 'error'; t.textContent = 'Offline'; }
 }
 checkHealth();
-setInterval(checkHealth, 15000);
+setInterval(checkHealth, 60000);
 
 // ── Row count ──
 async function updateRowCount() {

@@ -92,3 +92,8 @@ curl "http://127.0.0.1:8000/movies?start_year=2020&end_year=2023&genre=Action"
 # 5) Download gzipped dataset
 curl -o movies.csv.gz http://127.0.0.1:8000/datasets/download
 ```
+
+### Additional Docs
+
+- `DESIGN.md` — architecture and trade-offs
+- `PERFORMANCE.md` — CPU/memory efficiency decisions and constraints

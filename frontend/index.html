@@ -687,6 +687,9 @@ main > .card:last-child { animation-delay: 0.18s; }
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           </div>
           <p>Drop a <strong>.csv</strong> file here or click to browse</p>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">
+            Need test data? <a href="/sample-data" download="movies.csv" style="color:var(--accent-bright);text-decoration:none;border-bottom:1px solid var(--accent-glow-strong)" onclick="event.stopPropagation()">Download sample CSV</a> (367K movies, 16 MB)
+          </p>
           <input type="file" id="fileInput" accept=".csv">
         </div>
 
@@ -763,7 +766,7 @@ main > .card:last-child { animation-delay: 0.18s; }
 <div class="toast" id="toast"></div>
 
 <script>
-const API = 'http://localhost:8000';
+const API = window.location.origin;
 
 // ── Health Check ──────────────────────────────────────────
 async function checkHealth() {
@@ -882,6 +885,7 @@ async function queryMovies(e) {
   if (sy) params.set('start_year', sy);
   if (ey) params.set('end_year', ey);
   if (g) params.set('genre', g);
+  params.set('limit', '1000');
 
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Searching...';
@@ -916,7 +920,7 @@ async function queryMovies(e) {
       for (let i = 0; i < limit; i++) {
         const m = movies[i];
         const genres = m.genres
-          ? m.genres.split(',').map(g => `<span class="genre-tag">${g.trim()}</span>`).join(' ')
+          ? m.genres.split(',').map(g => `<span class="genre-tag">${esc(g.trim())}</span>`).join(' ')
           : '—';
         const ratingVal = m.rating != null ? m.rating.toFixed(1) : '—';
         const ratingPct = m.rating != null ? (m.rating / 10 * 100) : 0;

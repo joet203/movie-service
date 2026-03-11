@@ -69,7 +69,7 @@ The CSV data only contains a `year` column, not a full date. The query API uses 
 Genres are stored as a single comma-separated string rather than normalized into a junction table:
 
 - DuckDB is an OLAP engine where denormalized data is idiomatic
-- `LIKE '%Action%'` is pushed down to DuckDB's scan layer and is efficient on columnar data
+- `ILIKE '%Action%'` (case-insensitive) is pushed down to DuckDB's scan layer and is efficient on columnar data
 - A junction table would add join complexity with no performance benefit
 - Trade-off: substring matching could theoretically produce false positives (e.g., "Drama" matching "Melodrama"), but the dataset's genre vocabulary doesn't contain such conflicts
 

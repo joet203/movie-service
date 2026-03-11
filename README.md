@@ -91,6 +91,17 @@ make clean      # Stop server + delete DuckDB files
 make help       # Show all available commands
 ```
 
+**Without make** (Windows or if `make` isn't installed):
+
+```bash
+# Remove old DB files, then start
+rm -f movies.duckdb movies.duckdb.wal   # del on Windows
+uv run fastapi dev main.py
+
+# Run tests
+uv run pytest tests/ -v
+```
+
 ## Usage Walkthrough
 
 1. **Start the server**: `make run`
@@ -106,10 +117,24 @@ make help       # Show all available commands
 | `GET` | `/health` | Health check |
 | `POST` | `/datasets` | Upload CSV (returns 202 + task ID) |
 | `GET` | `/tasks/{id}/events` | SSE progress stream |
-| `GET` | `/movies` | Query movies (`?start_year=&end_year=&genre=`) |
+| `GET` | `/movies` | Query movies (params below) |
 | `GET` | `/datasets/download` | Download gzipped CSV |
 | `GET` | `/` | Frontend UI |
 | `GET` | `/sample-data` | Download sample movies.csv |
+
+#### Query Parameters for `/movies`
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `start_year` | int | — | Filter movies from this year |
+| `end_year` | int | — | Filter movies up to this year |
+| `genre` | string | — | Case-insensitive genre substring match |
+| `sort_by` | string | `movie_name` | Sort column (`movie_name`, `year`, `genres`, `rating`) |
+| `sort_order` | string | `asc` | Sort direction (`asc` or `desc`) |
+| `limit` | int | 1000 | Results per page (max 10,000) |
+| `offset` | int | 0 | Pagination offset |
+
+The response includes an `X-Total-Count` header with the total number of matching rows (before pagination).
 
 ### curl Examples
 
@@ -120,8 +145,8 @@ curl -X POST -F "file=@movies.csv" http://localhost:8000/datasets
 # Poll progress (replace TASK_ID)
 curl -N http://localhost:8000/tasks/TASK_ID/events
 
-# Query
-curl "http://localhost:8000/movies?start_year=2020&end_year=2023&genre=Action"
+# Query (with sorting and pagination)
+curl -v "http://localhost:8000/movies?start_year=2020&end_year=2023&genre=Action&sort_by=rating&sort_order=desc&limit=50"
 
 # Download
 curl -o movies.csv.gz http://localhost:8000/datasets/download

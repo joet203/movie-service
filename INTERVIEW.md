@@ -82,7 +82,7 @@ Correct. This is a conscious trade-off for a single-process take-home. In produc
 
 DuckDB handles this out of the box — out-of-core processing spills to disk. But the API layer would need changes:
 
-- **Pagination**: The `/movies` endpoint currently returns all matching rows. Add `limit`/`offset` or cursor-based pagination.
+- **Pagination**: Already implemented with `limit`/`offset` params and `X-Total-Count` header. For cursor-based pagination at extreme scale, switch to keyset pagination.
 - **Streaming responses**: For very large result sets, stream JSON lines instead of building a full list.
 - **Ingestion**: DuckDB's `read_csv` scales linearly. Even at 100M rows it would be minutes, not hours.
 - **Download**: Already streaming — no memory concerns.
@@ -98,9 +98,9 @@ Progress reporting is unidirectional (server → client). SSE is simpler:
 
 WebSockets would be overkill for one-way status updates.
 
-### "Why `LIKE '%Action%'` instead of normalizing genres?"
+### "Why `ILIKE '%Action%'` instead of normalizing genres?"
 
-DuckDB is an OLAP engine where denormalized data is idiomatic. The `LIKE` predicate is pushed down to the scan layer and runs in C++. A junction table would add join complexity with no performance benefit — the filtered query returns 8,377 rows in 0.03s.
+DuckDB is an OLAP engine where denormalized data is idiomatic. `ILIKE` (case-insensitive) is pushed down to the scan layer and runs in C++. A junction table would add join complexity with no performance benefit — the filtered query returns 8,377 rows in 0.03s.
 
 Trade-off: substring matching could produce false positives (`"Drama"` matching `"Melodrama"`), but the dataset's genre vocabulary doesn't have such conflicts. If it did, you'd split on commas and use `list_contains`.
 

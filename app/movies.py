@@ -392,7 +392,15 @@ async def _event_generator(task_id: str):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/movies")
+@router.get(
+    "/movies",
+    responses={
+        202: {
+            "description": "Query is still running; poll task endpoints for progress/results",
+            "model": TaskResponse,
+        }
+    },
+)
 async def query_movies(
     response: Response,
     start_year: int | None = None,
@@ -468,7 +476,19 @@ def get_task_results(task_id: str, response: Response):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/datasets/download")
+@router.get(
+    "/datasets/download",
+    responses={
+        200: {
+            "description": "Gzipped CSV file",
+            "content": {"application/gzip": {}},
+        },
+        202: {
+            "description": "Export is still running; poll task endpoints for progress/download",
+            "model": TaskResponse,
+        },
+    },
+)
 async def download_dataset() -> StreamingResponse:
     # Same threshold pattern as /movies:
     # return direct payload for quick exports, task flow for slow exports.

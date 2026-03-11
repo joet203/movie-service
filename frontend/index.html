@@ -178,13 +178,14 @@ section:first-of-type{padding-top:100px}
 .filter-sep{width:1px;height:24px;background:var(--border);margin:0 4px}
 .genre-and-row{display:flex;align-items:flex-start;gap:10px;flex-basis:100%;padding-top:2px}
 .genre-and-label{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding-top:7px;white-space:nowrap}
-.genre-and-select{font-family:var(--font-body);font-size:.8rem;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-warm);color:var(--text);min-width:250px;min-height:86px;outline:none}
-.genre-and-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle)}
-.genre-and-hint{font-size:.75rem;color:var(--text-muted);padding-top:8px}
+.genre-and-grid{display:grid;grid-template-columns:repeat(5,minmax(88px,1fr));gap:6px 10px;flex:1;min-width:280px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-warm)}
+.genre-and-opt{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.genre-and-opt input{accent-color:var(--accent)}
+.genre-and-hint{font-size:.75rem;color:var(--text-muted);padding-top:8px;min-width:180px}
 @media(max-width:720px){
   .genre-and-row{flex-direction:column;align-items:stretch}
   .genre-and-label{padding-top:0}
-  .genre-and-select{width:100%;min-width:0}
+  .genre-and-grid{grid-template-columns:repeat(2,minmax(110px,1fr));width:100%;min-width:0}
   .genre-and-hint{padding-top:0}
 }
 
@@ -331,6 +332,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
       <a href="#architecture">Architecture</a>
       <a href="#tech">Tech</a>
       <a href="#security">Security</a>
+      <a href="#future">Future</a>
       <a href="#docs">Docs</a>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -460,20 +462,20 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
         </label>
       </div>
       <div class="genre-and-row">
-        <label class="genre-and-label" for="genresAllSelect">Match All Genres (AND)</label>
-        <select id="genresAllSelect" class="genre-and-select" multiple size="4">
-          <option value="Action">Action</option>
-          <option value="Comedy">Comedy</option>
-          <option value="Crime">Crime</option>
-          <option value="Drama">Drama</option>
-          <option value="History">History</option>
-          <option value="Horror">Horror</option>
-          <option value="Mystery">Mystery</option>
-          <option value="Romance">Romance</option>
-          <option value="Sci-Fi">Sci-Fi</option>
-          <option value="Thriller">Thriller</option>
-        </select>
-        <span class="genre-and-hint">Cmd/Ctrl-click to select multiple genres.</span>
+        <span class="genre-and-label">Match All Genres (AND)</span>
+        <div id="genresAllChecks" class="genre-and-grid">
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Action">Action</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Comedy">Comedy</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Crime">Crime</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Drama">Drama</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="History">History</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Horror">Horror</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Mystery">Mystery</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Romance">Romance</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Sci-Fi">Sci-Fi</label>
+          <label class="genre-and-opt"><input type="checkbox" class="genre-all-check" value="Thriller">Thriller</label>
+        </div>
+        <span class="genre-and-hint">Checked genres are combined with AND matching.</span>
       </div>
     </div>
   </form>
@@ -662,41 +664,47 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
   </div>
 </section>
 
-<!-- ═══ SECURITY & FUTURE ═══ -->
+<!-- ═══ SECURITY ═══ -->
 <section id="security">
   <div class="section-head fade-in">
     <span class="section-tag">Hardening</span>
-    <h2>Security &amp; Future</h2>
-    <p>Measures taken and production-readiness improvements.</p>
+    <h2>Security</h2>
+    <p>Hardening measures implemented in this version.</p>
   </div>
   <div class="card fade-in fade-in-d1">
-    <div class="two-col">
-      <div>
-        <h4>Implemented</h4>
-        <ul class="check-list">
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>10 GB upload size limit (413 on exceed)</li>
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Query pagination (LIMIT/OFFSET, max 10K)</li>
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>LIKE wildcard escaping in genre filter</li>
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Sanitized error messages (log internally)</li>
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>XSS prevention (HTML escaping)</li>
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Path injection guard on temp files</li>
-          <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Parameterized SQL queries</li>
-        </ul>
-      </div>
-      <div>
-        <h4>Future / Production</h4>
-        <ul class="check-list">
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Redis-backed task queue (Celery/Dramatiq)</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Rate limiting on upload endpoint</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Authentication &amp; API keys</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Docker containerization</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>CI/CD with automated testing</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>OpenTelemetry instrumentation</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Restrict CORS to specific origins</li>
-          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Optional data quality mode (dedupe rows + normalize title punctuation/spacing)</li>
-        </ul>
-      </div>
-    </div>
+    <h4>Implemented</h4>
+    <ul class="check-list">
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>10 GB upload size limit (413 on exceed)</li>
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Query pagination (LIMIT/OFFSET, max 10K)</li>
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>LIKE wildcard escaping in genre filter</li>
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Sanitized error messages (log internally)</li>
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>XSS prevention (HTML escaping)</li>
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Path injection guard on temp files</li>
+      <li><span class="check-icon check-done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>Parameterized SQL queries</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ FUTURE ═══ -->
+<section id="future">
+  <div class="section-head fade-in">
+    <span class="section-tag">Roadmap</span>
+    <h2>Future Improvements</h2>
+    <p>Possible production enhancements beyond assessment scope.</p>
+  </div>
+  <div class="card fade-in fade-in-d1">
+    <h4>Future / Production</h4>
+    <ul class="check-list">
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Dynamic genre filters from a dedicated <code>GET /genres</code> endpoint based on the currently loaded dataset</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Redis-backed task queue (Celery/Dramatiq)</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Rate limiting on upload endpoint</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Authentication &amp; API keys</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Docker containerization</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>CI/CD with automated testing</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>OpenTelemetry instrumentation</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Restrict CORS to specific origins</li>
+      <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Optional data quality mode (dedupe rows + normalize title punctuation/spacing)</li>
+    </ul>
   </div>
 </section>
 
@@ -888,8 +896,8 @@ function buildQueryParams() {
   const params = applyDebugDelay(new URLSearchParams());
   const g = document.getElementById('genreInput').value.trim();
   const selectedGenresAll = Array.from(
-    document.getElementById('genresAllSelect').selectedOptions
-  ).map((option) => option.value.trim()).filter(Boolean);
+    document.querySelectorAll('.genre-all-check:checked')
+  ).map((input) => input.value.trim()).filter(Boolean);
   const sy = document.getElementById('startYear').value;
   const ey = document.getElementById('endYear').value;
   const sb = document.getElementById('sortBy').value;

@@ -84,7 +84,7 @@ Open `http://localhost:8000` for the frontend UI, or `http://localhost:8000/docs
 
 ```bash
 make run        # Clean start (kills old server, removes DB, starts fresh)
-make test       # Run all 29 tests
+make test       # Run all 33 tests
 make bench      # Run benchmark suite (starts/stops server automatically)
 make stop       # Stop the running server
 make clean      # Stop server + delete DuckDB files
@@ -192,9 +192,9 @@ frontend/
   index.html         Single-page dashboard UI
 tests/
   conftest.py        Test fixtures (in-memory DuckDB)
-  test_movies.py     29 tests across all endpoints
+  test_movies.py     33 tests across all endpoints
 DESIGN.md            Architecture and design decisions
-INTERVIEW.md         Interview prep Q&A
+AI_WORKFILES.md      AI tool workfiles and artifacts summary
 benchmark.py         Performance benchmark script
 Makefile             Dev workflow shortcuts
 ```
@@ -209,3 +209,7 @@ See [DESIGN.md](DESIGN.md) for detailed rationale. Summary:
 - **SSE** for real-time progress updates
 - **Streaming responses** for memory-efficient downloads
 - **Minimal dependencies** — 2 runtime deps: `duckdb` + `python-multipart`
+
+## AI Workfiles
+
+See [AI_WORKFILES.md](AI_WORKFILES.md) for the included planning/design artifacts.

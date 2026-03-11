@@ -6,3 +6,5 @@ __pycache__/
 .pytest_cache/
 movies_large.csv
 frontend/movies_large.csv
+.claude/
+WRAPUP.md

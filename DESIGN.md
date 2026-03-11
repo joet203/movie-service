@@ -89,7 +89,7 @@ In production, this would be replaced with Redis or a database-backed solution f
 
 ## Benchmarks
 
-Measured on Apple M1, 367,314-row CSV (15.8 MB), Python 3.13, DuckDB 1.3:
+Measured on Apple M4, 367,314-row CSV (15.8 MB), Python 3.13, DuckDB 1.3:
 
 | Operation | Time | Notes |
 |---|---|---|

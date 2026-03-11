@@ -104,15 +104,15 @@ nav.scrolled{box-shadow:var(--shadow)}
 /* Accordion */
 .accordion{margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:box-shadow .2s,border-color .2s}
 .accordion:hover{box-shadow:var(--shadow-sm)}
-.accordion.open{border-color:var(--accent);box-shadow:0 2px 12px rgba(24,99,220,.06)}
+.accordion.open{border-color:var(--accent);box-shadow:0 2px 12px rgba(24,99,220,.06);overflow:visible}
 .accordion-trigger{width:100%;text-align:left;background:var(--surface);border:none;padding:20px 24px;font-family:var(--font-display);font-size:1.08rem;font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;transition:background .15s;line-height:1.4}
 .accordion-trigger:hover{background:var(--bg-warm)}
 .accordion-trigger .chevron{width:20px;height:20px;flex-shrink:0;color:var(--text-muted);transition:transform .25s ease,color .2s}
 .accordion.open .accordion-trigger .chevron{transform:rotate(180deg);color:var(--accent)}
 .accordion-trigger .q-num{font-family:var(--font-body);font-size:.7rem;font-weight:600;color:var(--accent);background:var(--accent-light);padding:3px 8px;border-radius:4px;flex-shrink:0;letter-spacing:.04em}
 .accordion-body{max-height:0;overflow:hidden;transition:max-height .35s ease}
-.accordion.open .accordion-body{max-height:2000px}
-.accordion-content{padding:0 24px 24px;border-top:1px solid var(--border-light)}
+.accordion.open .accordion-body{max-height:2000px;overflow:visible}
+.accordion-content{padding:0 24px 24px;border-top:1px solid var(--border-light);position:relative;overflow:visible}
 .accordion-content p{color:var(--text-secondary);font-size:.9rem;line-height:1.7;margin-top:16px}
 .accordion-content ul,.accordion-content ol{margin:12px 0 0 20px;color:var(--text-secondary);font-size:.9rem;line-height:1.7}
 .accordion-content li{margin-bottom:6px}
@@ -120,8 +120,8 @@ nav.scrolled{box-shadow:var(--shadow)}
 .accordion-content code{font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:.82rem;background:var(--bg-section);padding:2px 6px;border-radius:4px;color:var(--accent-hover)}
 
 /* Jargon tooltips */
-.jargon{position:relative;border-bottom:1px dashed var(--accent);cursor:help;color:var(--text);font-weight:500}
-.jargon-def{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:.76rem;font-weight:400;padding:8px 12px;border-radius:var(--radius-sm);white-space:normal;width:280px;line-height:1.5;z-index:50;box-shadow:var(--shadow-lg);pointer-events:none;font-style:normal}
+.jargon{position:relative;border-bottom:1px dashed var(--accent);cursor:help;color:var(--text);font-weight:500;z-index:2}
+.jargon-def{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:.76rem;font-weight:400;padding:8px 12px;border-radius:var(--radius-sm);white-space:normal;width:280px;line-height:1.5;z-index:500;box-shadow:var(--shadow-lg);pointer-events:none;font-style:normal}
 .jargon-def::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)}
 .jargon:hover .jargon-def{display:block}
 
@@ -460,7 +460,7 @@ footer p{font-size:.78rem;color:var(--text-muted)}
           <li>Optimization <span class="jargon-inline">(identified DuckDB native CSV reader opportunity)</span></li>
           <li>Documentation <span class="jargon-inline">(DESIGN.md, this interview prep)</span></li>
         </ul>
-        <p>All AI workfiles (<code>plan.md</code>, <code>plan.html</code>) are included in the submission.</p>
+        <p>All AI workfiles (<code>requirements.md</code>, <code>plan.md</code>, <code>plan.html</code>, <code>DESIGN.md</code>, <code>AI_WORKFILES.md</code>) are included in the submission.</p>
       </div>
     </div>
   </div>
@@ -509,8 +509,8 @@ footer p{font-size:.78rem;color:var(--text-muted)}
       <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:8.5%"></div></div>
     </div>
     <div class="stat-card">
-      <div class="stat-val">15 <span class="stat-unit">tests</span></div>
-      <div class="stat-label">Test suite &middot; 0.17s</div>
+      <div class="stat-val">33 <span class="stat-unit">tests</span></div>
+      <div class="stat-label">Test suite &middot; 0.74s</div>
       <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:100%"></div></div>
     </div>
     <div class="stat-card">

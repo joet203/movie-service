@@ -38,6 +38,32 @@
   --font-display:'Newsreader',Georgia,serif;
   --font-body:'Outfit',system-ui,sans-serif;
 }
+[data-theme="dark"]{
+  --accent:#4d94ff;
+  --accent-light:rgba(77,148,255,0.12);
+  --accent-hover:#6aa3ff;
+  --accent-subtle:rgba(77,148,255,0.08);
+  --bg:#111318;
+  --bg-warm:#16181d;
+  --bg-section:#1a1d24;
+  --surface:#1e2028;
+  --border:#2e3140;
+  --border-light:#252833;
+  --text:#e8eaf0;
+  --text-secondary:#9ba3b5;
+  --text-muted:#6b7280;
+  --success:#34d399;
+  --success-bg:rgba(52,211,153,0.1);
+  --error:#f87171;
+  --error-bg:rgba(248,113,113,0.1);
+  --warning:#fbbf24;
+}
+[data-theme="dark"] nav{background:rgba(17,19,24,0.92)}
+[data-theme="dark"] .jargon-def{background:#1e2028;color:#e8eaf0;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+[data-theme="dark"] .jargon-def::after{border-top-color:#1e2028}
+[data-theme="dark"] .accordion.open{box-shadow:0 2px 12px rgba(77,148,255,.1)}
+[data-theme="dark"] .stat-card:hover{box-shadow:0 2px 12px rgba(77,148,255,.12)}
+[data-theme="dark"] .accordion-content code{background:#252833}
 html{font-size:15px;scroll-behavior:smooth}
 body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
 
@@ -138,6 +164,14 @@ nav.scrolled{box-shadow:var(--shadow)}
 footer{margin-top:72px;padding:32px 0;border-top:1px solid var(--border-light);text-align:center}
 footer p{font-size:.78rem;color:var(--text-muted)}
 
+/* Theme toggle */
+.theme-toggle{background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:5px 8px;color:var(--text-muted);display:flex;align-items:center;transition:all .2s}
+.theme-toggle:hover{color:var(--text);border-color:var(--text-muted)}
+.theme-toggle svg{width:16px;height:16px}
+.theme-toggle .icon-moon,.theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-moon{display:block}
+[data-theme="dark"] .theme-toggle .icon-sun{display:block}
+
 /* Responsive */
 @media(max-width:600px){
   .hero h1{font-size:1.9rem}
@@ -162,10 +196,16 @@ footer p{font-size:.78rem;color:var(--text-muted)}
 <nav id="nav">
   <div class="nav-inner">
     <a href="/" class="nav-logo"><span class="dot"></span> Movie Database</a>
-    <a href="/" class="back-link">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-      Back to Dashboard
-    </a>
+    <div style="display:flex;align-items:center;gap:8px">
+      <a href="/" class="back-link">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        Back to Dashboard
+      </a>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
   </div>
 </nav>
 
@@ -501,6 +541,22 @@ footer p{font-size:.78rem;color:var(--text-muted)}
 </div>
 
 <script>
+// Theme
+function getPreferredTheme() {
+  const stored = localStorage.getItem('theme');
+  if (stored) return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+applyTheme(getPreferredTheme());
+
 // Nav scroll shadow
 const nav = document.getElementById('nav');
 window.addEventListener('scroll', () => {

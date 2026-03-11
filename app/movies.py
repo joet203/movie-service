@@ -8,7 +8,7 @@ import tempfile
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from app import db
 from app.model import HealthResponse, Movie, TaskResponse, TaskStatus
@@ -195,11 +195,17 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+VALID_SORT_COLUMNS = {"movie_name", "year", "genres", "rating"}
+
+
 @router.get("/movies")
 async def query_movies(
+    response: Response,
     start_year: int | None = None,
     end_year: int | None = None,
     genre: str | None = None,
+    sort_by: str = Query(default="movie_name"),
+    sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, le=MAX_QUERY_LIMIT, ge=1),
     offset: int = Query(default=0, ge=0),
 ) -> list[Movie]:
@@ -208,22 +214,36 @@ async def query_movies(
             status_code=400,
             detail="start_year must be less than or equal to end_year",
         )
+    if sort_by not in VALID_SORT_COLUMNS:
+        sort_by = "movie_name"
 
     conn = db.get_db()
-    sql = "SELECT movie_name, year, genres, rating FROM movies WHERE 1=1"
+    where = "WHERE 1=1"
     params: list = []
 
     if start_year is not None:
-        sql += " AND year >= ?"
+        where += " AND year >= ?"
         params.append(start_year)
     if end_year is not None:
-        sql += " AND year <= ?"
+        where += " AND year <= ?"
         params.append(end_year)
     if genre is not None:
-        sql += " AND genres LIKE ? ESCAPE '\\'"
+        where += " AND genres ILIKE ? ESCAPE '\\'"
         params.append(f"%{_escape_like(genre)}%")
 
-    sql += " LIMIT ? OFFSET ?"
+    # Total count for pagination (reuses same WHERE clause)
+    count_params = list(params)
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM movies {where}", count_params
+    ).fetchone()[0]
+    response.headers["X-Total-Count"] = str(total)
+
+    direction = "ASC" if sort_order == "asc" else "DESC"
+    sql = (
+        f"SELECT movie_name, year, genres, rating FROM movies {where}"
+        f" ORDER BY {sort_by} {direction} NULLS LAST"
+        f" LIMIT ? OFFSET ?"
+    )
     params.extend([limit, offset])
 
     result = conn.execute(sql, params)

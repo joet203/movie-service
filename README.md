@@ -60,3 +60,13 @@ uv add some_other_package
 ### Useful info
 
 Go to `localhost:8000/docs` for the `Swagger` UI
+
+### Implemented API Endpoints
+
+- `POST /datasets` — upload/ingest CSV (returns `202` with `task_id`)
+- `GET /tasks/{task_id}/events` — real-time task progress via SSE
+- `GET /movies` — query by `start_year`, `end_year`, `genre` (plus sort/pagination)
+  - Returns `200` with rows when query finishes quickly
+  - Returns `202` with `task_id` when query exceeds ~2 seconds
+- `GET /tasks/{task_id}/results` — fetch rows for a completed long-running query
+- `GET /datasets/download` — download full dataset as `movies.csv.gz`

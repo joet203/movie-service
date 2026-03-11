@@ -5,10 +5,12 @@ import csv
 import logging
 import os
 import tempfile
+import time
+from typing import Callable, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, UploadFile
-from fastapi.responses import Response, StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app import db
 from app.model import HealthResponse, Movie, TaskResponse, TaskStatus
@@ -18,16 +20,148 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 EXPECTED_HEADERS = ["movie_name", "year", "genres", "rating"]
-CHUNK_SIZE = 1024 * 1024          # 1 MB for upload streaming
-DOWNLOAD_CHUNK = 65_536            # 64 KB for download streaming
+CHUNK_SIZE = 1024 * 1024  # 1 MB for upload streaming
+DOWNLOAD_CHUNK = 65_536  # 64 KB for download streaming
 MAX_UPLOAD_BYTES = 10_000_000_000  # 10 GB upload limit
 DEFAULT_QUERY_LIMIT = 1000
 MAX_QUERY_LIMIT = 10_000
+SSE_QUERY_THRESHOLD = 2.0  # seconds
+TASK_TTL_SECONDS = 15 * 60
+TASK_MAX_COUNT = 500
+TERMINAL_STATES = {"completed", "error"}
+VALID_SORT_COLUMNS = {"movie_name", "year", "genres", "rating"}
+
+
+def _sanitize_error(e: Exception) -> str:
+    """Return a safe error message — expose CSV format issues, hide internals."""
+    msg = str(e)
+    if "header" in msg.lower() or "csv" in msg.lower() or "empty" in msg.lower():
+        return msg
+    return "Operation failed — check input and try again"
+
+
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards in user input."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _validate_year_range(start_year: int | None, end_year: int | None) -> None:
+    if start_year is not None and end_year is not None and start_year > end_year:
+        raise HTTPException(
+            status_code=400,
+            detail="start_year must be less than or equal to end_year",
+        )
+
+
+def _build_where_clause(
+    start_year: int | None,
+    end_year: int | None,
+    genre: str | None,
+) -> tuple[str, list]:
+    where = "WHERE 1=1"
+    params: list = []
+
+    if start_year is not None:
+        where += " AND year >= ?"
+        params.append(start_year)
+    if end_year is not None:
+        where += " AND year <= ?"
+        params.append(end_year)
+    if genre is not None:
+        where += " AND genres ILIKE ? ESCAPE '\\'"
+        params.append(f"%{_escape_like(genre)}%")
+
+    return where, params
+
+
+def _new_task_id() -> str:
+    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    task_id = str(uuid4())
+    db.create_task(task_id)
+    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    return task_id
+
+
+def _execute_query(
+    start_year: int | None,
+    end_year: int | None,
+    genre: str | None,
+    sort_by: str,
+    sort_order: Literal["asc", "desc"],
+    limit: int,
+    offset: int,
+    on_progress: Callable[[int], None] | None = None,
+) -> dict:
+    normalized_sort = sort_by if sort_by in VALID_SORT_COLUMNS else "movie_name"
+    direction = "ASC" if sort_order == "asc" else "DESC"
+    where, params = _build_where_clause(start_year, end_year, genre)
+
+    conn = db.get_db()
+    try:
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM movies {where}", params
+        ).fetchone()[0]
+        if on_progress is not None:
+            on_progress(25)
+
+        sql = (
+            f"SELECT movie_name, year, genres, rating FROM movies {where}"
+            f" ORDER BY {normalized_sort} {direction} NULLS LAST"
+            f" LIMIT ? OFFSET ?"
+        )
+        result = conn.execute(sql, params + [limit, offset])
+        columns = [desc[0] for desc in result.description]
+
+        t0 = time.monotonic()
+        rows = result.fetchall()
+        query_time = round(time.monotonic() - t0, 3)
+        if on_progress is not None:
+            on_progress(85)
+    finally:
+        conn.close()
+
+    movies = [dict(zip(columns, row)) for row in rows]
+    return {"total": total, "movies": movies, "query_time": query_time}
+
+
+def _run_query(
+    task_id: str,
+    start_year: int | None,
+    end_year: int | None,
+    genre: str | None,
+    sort_by: str,
+    sort_order: Literal["asc", "desc"],
+    limit: int,
+    offset: int,
+) -> None:
+    db.set_task(task_id, status="processing", progress=5, error=None)
+    try:
+        result = _execute_query(
+            start_year=start_year,
+            end_year=end_year,
+            genre=genre,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+            on_progress=lambda progress: db.set_task(task_id, progress=progress),
+        )
+        db.set_task(
+            task_id,
+            status="completed",
+            progress=100,
+            result=result,
+            error=None,
+        )
+    except Exception as e:
+        logger.exception("Query failed for task %s", task_id)
+        db.set_task(task_id, status="error", progress=100, error=_sanitize_error(e))
 
 
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
+
 
 @router.get("/health")
 async def health() -> HealthResponse:
@@ -37,6 +171,7 @@ async def health() -> HealthResponse:
 # ---------------------------------------------------------------------------
 # Upload / Ingest
 # ---------------------------------------------------------------------------
+
 
 @router.post("/datasets", status_code=202)
 async def upload_dataset(
@@ -59,8 +194,7 @@ async def upload_dataset(
     finally:
         tmp.close()
 
-    task_id = str(uuid4())
-    db.tasks[task_id] = {"status": "pending", "progress": 0, "error": None}
+    task_id = _new_task_id()
 
     # BackgroundTasks runs after the response is sent.
     # Starlette runs sync functions in a thread pool automatically.
@@ -71,9 +205,8 @@ async def upload_dataset(
 
 def _ingest_csv(task_id: str, temp_path: str) -> None:
     """Synchronous ingestion — runs in a thread via BackgroundTasks."""
+    db.set_task(task_id, status="processing", progress=5, error=None)
     conn = db.get_db()
-    task = db.tasks[task_id]
-    task["status"] = "processing"
 
     try:
         # Step 1: validate header (quick first-line read, no full parse)
@@ -88,6 +221,8 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
                     f"Invalid CSV headers: expected {EXPECTED_HEADERS}, "
                     f"got {normalized}"
                 )
+
+        db.set_task(task_id, progress=25)
 
         # Safety: temp paths from tempfile should never contain quotes,
         # but assert to prevent SQL injection via path manipulation.
@@ -117,45 +252,40 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
         if row_count == 0:
             raise ValueError("CSV file contains only a header (no data rows)")
 
+        db.set_task(task_id, progress=75)
+
         # Step 3: atomic swap — readers never see partial data
         conn.execute("BEGIN TRANSACTION")
         conn.execute("DROP TABLE IF EXISTS movies")
         conn.execute("ALTER TABLE movies_staging RENAME TO movies")
         conn.execute("COMMIT")
 
-        task["progress"] = 100
-        task["status"] = "completed"
+        db.set_task(task_id, status="completed", progress=100)
 
     except Exception as e:
         logger.exception("Ingestion failed for task %s", task_id)
-        task["status"] = "error"
-        task["error"] = _sanitize_error(e)
+        db.set_task(task_id, status="error", progress=100, error=_sanitize_error(e))
         try:
             conn.execute("DROP TABLE IF EXISTS movies_staging")
         except Exception:
             pass
     finally:
+        conn.close()
         try:
             os.unlink(temp_path)
         except OSError:
             pass
 
 
-def _sanitize_error(e: Exception) -> str:
-    """Return a safe error message — expose CSV format issues, hide internals."""
-    msg = str(e)
-    if "header" in msg.lower() or "csv" in msg.lower() or "empty" in msg.lower():
-        return msg
-    return "Ingestion failed — check CSV format and try again"
-
-
 # ---------------------------------------------------------------------------
 # SSE Progress
 # ---------------------------------------------------------------------------
 
+
 @router.get("/tasks/{task_id}/events")
 async def task_events(task_id: str) -> StreamingResponse:
-    if task_id not in db.tasks:
+    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    if not db.task_exists(task_id):
         raise HTTPException(status_code=404, detail="Task not found")
     return StreamingResponse(
         _event_generator(task_id),
@@ -167,19 +297,22 @@ async def _event_generator(task_id: str):
     """Yield SSE events until the task completes or errors."""
     last_progress = -1
     while True:
-        task = db.tasks[task_id]
+        task = db.get_task(task_id)
+        if task is None:
+            break
+
         status = task["status"]
         progress = task["progress"]
 
         # Only emit when progress actually changes (or terminal state)
-        if progress != last_progress or status in ("completed", "error"):
+        if progress != last_progress or status in TERMINAL_STATES:
             event = TaskStatus(
                 status=status, progress=progress, error=task.get("error")
             )
             yield f"data: {event.model_dump_json()}\n\n"
             last_progress = progress
 
-        if status in ("completed", "error"):
+        if status in TERMINAL_STATES:
             break
 
         # Non-blocking poll interval — yields control to the event loop
@@ -190,13 +323,6 @@ async def _event_generator(task_id: str):
 # Query
 # ---------------------------------------------------------------------------
 
-def _escape_like(value: str) -> str:
-    """Escape SQL LIKE wildcards in user input."""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-VALID_SORT_COLUMNS = {"movie_name", "year", "genres", "rating"}
-
 
 @router.get("/movies")
 async def query_movies(
@@ -205,69 +331,91 @@ async def query_movies(
     end_year: int | None = None,
     genre: str | None = None,
     sort_by: str = Query(default="movie_name"),
-    sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, le=MAX_QUERY_LIMIT, ge=1),
     offset: int = Query(default=0, ge=0),
 ) -> list[Movie]:
-    if start_year is not None and end_year is not None and start_year > end_year:
-        raise HTTPException(
-            status_code=400,
-            detail="start_year must be less than or equal to end_year",
+    _validate_year_range(start_year, end_year)
+
+    # Run query in background and wait up to 2 seconds.
+    # If it exceeds threshold, return task_id and continue via SSE/results endpoints.
+    task_id = _new_task_id()
+    task = asyncio.create_task(
+        asyncio.to_thread(
+            _run_query,
+            task_id,
+            start_year,
+            end_year,
+            genre,
+            sort_by,
+            sort_order,
+            limit,
+            offset,
         )
-    if sort_by not in VALID_SORT_COLUMNS:
-        sort_by = "movie_name"
-
-    conn = db.get_db()
-    where = "WHERE 1=1"
-    params: list = []
-
-    if start_year is not None:
-        where += " AND year >= ?"
-        params.append(start_year)
-    if end_year is not None:
-        where += " AND year <= ?"
-        params.append(end_year)
-    if genre is not None:
-        where += " AND genres ILIKE ? ESCAPE '\\'"
-        params.append(f"%{_escape_like(genre)}%")
-
-    # Total count for pagination (reuses same WHERE clause)
-    count_params = list(params)
-    total = conn.execute(
-        f"SELECT COUNT(*) FROM movies {where}", count_params
-    ).fetchone()[0]
-    response.headers["X-Total-Count"] = str(total)
-
-    direction = "ASC" if sort_order == "asc" else "DESC"
-    sql = (
-        f"SELECT movie_name, year, genres, rating FROM movies {where}"
-        f" ORDER BY {sort_by} {direction} NULLS LAST"
-        f" LIMIT ? OFFSET ?"
     )
-    params.extend([limit, offset])
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=SSE_QUERY_THRESHOLD)
+    except asyncio.TimeoutError:
+        return JSONResponse(status_code=202, content={"task_id": task_id})
 
-    result = conn.execute(sql, params)
-    columns = [desc[0] for desc in result.description]
-    return [Movie(**dict(zip(columns, row))) for row in result.fetchall()]
+    completed = db.get_task(task_id)
+    if completed is None:
+        raise HTTPException(status_code=500, detail="Query task missing")
+    if completed["status"] == "error":
+        db.delete_task(task_id)
+        raise HTTPException(status_code=500, detail=completed.get("error"))
+
+    result = completed.get("result")
+    if result is None:
+        db.delete_task(task_id)
+        raise HTTPException(status_code=500, detail="No query result available")
+
+    response.headers["X-Total-Count"] = str(result["total"])
+    db.delete_task(task_id)
+    return [Movie(**row) for row in result["movies"]]
+
+
+@router.get("/tasks/{task_id}/results")
+def get_task_results(task_id: str, response: Response):
+    db.prune_tasks(max_tasks=TASK_MAX_COUNT, ttl_seconds=TASK_TTL_SECONDS)
+    task = db.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task["status"] != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Task is {task['status']}, not completed",
+        )
+
+    result = task.get("result")
+    if result is None:
+        raise HTTPException(status_code=404, detail="No results available")
+
+    response.headers["X-Total-Count"] = str(result["total"])
+    return result["movies"]
 
 
 # ---------------------------------------------------------------------------
 # Download
 # ---------------------------------------------------------------------------
 
+
 @router.get("/datasets/download")
 async def download_dataset() -> StreamingResponse:
     conn = db.get_db()
-    count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
-    if count == 0:
-        raise HTTPException(status_code=404, detail="No data available for download")
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
+        if count == 0:
+            raise HTTPException(status_code=404, detail="No data available for download")
 
-    # DuckDB writes gzip-compressed CSV natively — efficient C++ path
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv.gz")
-    tmp.close()
-    conn.execute(
-        f"COPY movies TO '{tmp.name}' (FORMAT CSV, HEADER, COMPRESSION 'gzip')"
-    )
+        # DuckDB writes gzip-compressed CSV natively — efficient C++ path
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv.gz")
+        tmp.close()
+        conn.execute(
+            f"COPY movies TO '{tmp.name}' (FORMAT CSV, HEADER, COMPRESSION 'gzip')"
+        )
+    finally:
+        conn.close()
 
     return StreamingResponse(
         _file_streamer(tmp.name),

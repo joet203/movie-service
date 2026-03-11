@@ -1,8 +1,10 @@
 import gzip
 import io
 import json
+import time
 
 from app import db
+from app import movies
 
 
 class TestHealth:
@@ -124,6 +126,34 @@ class TestQuery:
         )
         assert resp.status_code == 400
 
+    def test_query_auto_async_when_slow(self, client, populated_db, monkeypatch):
+        original_run_query = movies._run_query
+
+        def slow_run_query(*args, **kwargs):
+            time.sleep(0.05)
+            return original_run_query(*args, **kwargs)
+
+        monkeypatch.setattr(movies, "_run_query", slow_run_query)
+        monkeypatch.setattr(movies, "SSE_QUERY_THRESHOLD", 0.001)
+
+        resp = client.get("/movies", params={"genre": "Action"})
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+
+        # Poll for completion
+        for _ in range(20):
+            rr = client.get(f"/tasks/{task_id}/results")
+            if rr.status_code == 200:
+                break
+            assert rr.status_code == 409
+            time.sleep(0.01)
+
+        assert rr.status_code == 200
+        movies_result = rr.json()
+        assert len(movies_result) > 0
+        for m in movies_result:
+            assert "Action" in m["genres"]
+
 
 class TestDownload:
     def test_download(self, client, populated_db):
@@ -140,3 +170,28 @@ class TestDownload:
     def test_download_empty_db(self, client):
         resp = client.get("/datasets/download")
         assert resp.status_code == 404
+
+
+class TestTasks:
+    def test_task_results_not_found(self, client):
+        resp = client.get("/tasks/fake-id/results")
+        assert resp.status_code == 404
+
+    def test_task_pruning_keeps_registry_bounded(
+        self, client, populated_db, csv_file, monkeypatch
+    ):
+        monkeypatch.setattr(movies, "TASK_MAX_COUNT", 2)
+        monkeypatch.setattr(movies, "TASK_TTL_SECONDS", 9999.0)
+
+        task_ids = []
+        for _ in range(3):
+            resp = client.post(
+                "/datasets",
+                files={"file": ("movies.csv", io.BytesIO(csv_file), "text/csv")},
+            )
+            assert resp.status_code == 202
+            task_ids.append(resp.json()["task_id"])
+
+        assert task_ids[0] not in db.tasks
+        assert task_ids[1] in db.tasks
+        assert task_ids[2] in db.tasks

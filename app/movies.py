@@ -28,6 +28,7 @@ DEFAULT_MAX_QUERY_LIMIT = 50_000
 MAX_QUERY_LIMIT_ENV = "MOVIES_MAX_QUERY_LIMIT"
 SSE_QUERY_THRESHOLD = 2.0  # seconds
 SSE_DOWNLOAD_THRESHOLD = 2.0  # seconds
+DEBUG_MAX_PHASE_DELAY_MS = 5_000
 TASK_TTL_SECONDS = 15 * 60
 TASK_MAX_COUNT = 500
 TERMINAL_STATES = {"completed", "error"}
@@ -67,6 +68,17 @@ def _escape_like(value: str) -> str:
 
 def _normalize_sort_by(sort_by: str) -> str:
     return sort_by if sort_by in VALID_SORT_COLUMNS else "movie_name"
+
+
+def _debug_delay_seconds(debug_phase_delay_ms: int) -> float:
+    if debug_phase_delay_ms <= 0:
+        return 0.0
+    return debug_phase_delay_ms / 1000.0
+
+
+def _sleep_phase(seconds: float) -> None:
+    if seconds > 0:
+        time.sleep(seconds)
 
 
 def get_max_query_limit() -> int:
@@ -166,6 +178,7 @@ def _execute_query(
     sort_order: Literal["asc", "desc"],
     limit: int,
     offset: int,
+    phase_delay_seconds: float = 0.0,
     on_progress: Callable[[int], None] | None = None,
 ) -> dict:
     normalized_sort = _normalize_sort_by(sort_by)
@@ -179,6 +192,7 @@ def _execute_query(
         ).fetchone()[0]
         if on_progress is not None:
             on_progress(25)
+        _sleep_phase(phase_delay_seconds)
 
         sql = (
             f"SELECT movie_name, year, genres, rating FROM movies {where}"
@@ -194,6 +208,7 @@ def _execute_query(
         query_time = round(time.monotonic() - t0, 3)
         if on_progress is not None:
             on_progress(85)
+        _sleep_phase(phase_delay_seconds)
     finally:
         conn.close()
 
@@ -210,9 +225,11 @@ def _run_query(
     sort_order: Literal["asc", "desc"],
     limit: int,
     offset: int,
+    phase_delay_seconds: float = 0.0,
 ) -> None:
     """Run query in a background thread for SSE progress tracking."""
     db.set_task(task_id, status="processing", progress=5, error=None)
+    _sleep_phase(phase_delay_seconds)
 
     try:
         result = _execute_query(
@@ -223,6 +240,7 @@ def _run_query(
             sort_order=sort_order,
             limit=limit,
             offset=offset,
+            phase_delay_seconds=phase_delay_seconds,
             on_progress=lambda progress: db.set_task(task_id, progress=progress),
         )
         db.set_task(
@@ -237,9 +255,10 @@ def _run_query(
         db.set_task(task_id, status="error", progress=100, error=_sanitize_error(e))
 
 
-def _run_export(task_id: str) -> None:
+def _run_export(task_id: str, phase_delay_seconds: float = 0.0) -> None:
     """Build gzip export in background and attach artifact path to task result."""
     db.set_task(task_id, status="processing", progress=5, error=None)
+    _sleep_phase(phase_delay_seconds)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv.gz")
     tmp_path = tmp.name
     tmp.close()
@@ -251,10 +270,12 @@ def _run_export(task_id: str) -> None:
             raise ValueError("No data available for download")
 
         db.set_task(task_id, progress=25)
+        _sleep_phase(phase_delay_seconds)
         conn.execute(
             f"COPY movies TO '{tmp_path}' (FORMAT CSV, HEADER, COMPRESSION 'gzip')"
         )
         db.set_task(task_id, progress=90)
+        _sleep_phase(phase_delay_seconds)
         db.set_task(
             task_id,
             status="completed",
@@ -290,7 +311,9 @@ async def health() -> HealthResponse:
 
 @router.post("/datasets", status_code=202)
 async def upload_dataset(
-    file: UploadFile, background_tasks: BackgroundTasks
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    debug_phase_delay_ms: int = Query(default=0, ge=0, le=DEBUG_MAX_PHASE_DELAY_MS),
 ) -> TaskResponse:
     # Stream upload to a temp file — never hold full CSV in memory
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
@@ -310,16 +333,22 @@ async def upload_dataset(
         tmp.close()
 
     task_id = _new_task_id()
+    phase_delay_seconds = _debug_delay_seconds(debug_phase_delay_ms)
 
     # BackgroundTasks runs after the response is sent.
     # Starlette runs sync functions in a thread pool automatically.
-    background_tasks.add_task(_ingest_csv, task_id, tmp.name)
+    background_tasks.add_task(_ingest_csv, task_id, tmp.name, phase_delay_seconds)
     return TaskResponse(task_id=task_id)
 
 
-def _ingest_csv(task_id: str, temp_path: str) -> None:
+def _ingest_csv(
+    task_id: str,
+    temp_path: str,
+    phase_delay_seconds: float = 0.0,
+) -> None:
     """Synchronous ingestion — runs in a thread via BackgroundTasks."""
     db.set_task(task_id, status="processing", progress=5, error=None)
+    _sleep_phase(phase_delay_seconds)
     conn = db.get_db()
 
     try:
@@ -336,6 +365,7 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
                 )
 
         db.set_task(task_id, progress=25)
+        _sleep_phase(phase_delay_seconds)
 
         # Safety: temp paths from tempfile should never contain quotes,
         # but assert to prevent SQL injection via path manipulation.
@@ -364,6 +394,7 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
             raise ValueError("CSV file contains only a header (no data rows)")
 
         db.set_task(task_id, progress=75)
+        _sleep_phase(phase_delay_seconds)
 
         # Step 3: atomic swap — readers never see partial data
         conn.execute("BEGIN TRANSACTION")
@@ -453,9 +484,11 @@ async def query_movies(
     sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, ge=1),
     offset: int = Query(default=0, ge=0),
+    debug_phase_delay_ms: int = Query(default=0, ge=0, le=DEBUG_MAX_PHASE_DELAY_MS),
 ) -> list[Movie] | TaskResponse:
     _validate_year_range(start_year, end_year)
     _validate_limit(limit)
+    phase_delay_seconds = _debug_delay_seconds(debug_phase_delay_ms)
 
     # Run query in a worker thread and wait up to the threshold.
     # If it exceeds 2s, hand off to SSE flow with a task id.
@@ -471,6 +504,7 @@ async def query_movies(
             sort_order,
             limit,
             offset,
+            phase_delay_seconds,
         )
     )
     try:
@@ -513,11 +547,13 @@ async def query_movies_async(
     sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, ge=1),
     offset: int = Query(default=0, ge=0),
+    debug_phase_delay_ms: int = Query(default=0, ge=0, le=DEBUG_MAX_PHASE_DELAY_MS),
 ) -> TaskResponse:
     """Submit a query as a background task. Poll /tasks/{id}/events for progress,
     then GET /tasks/{id}/results for the data."""
     _validate_year_range(start_year, end_year)
     _validate_limit(limit)
+    phase_delay_seconds = _debug_delay_seconds(debug_phase_delay_ms)
 
     task_id = _new_task_id()
     background_tasks.add_task(
@@ -530,6 +566,7 @@ async def query_movies_async(
         sort_order,
         limit,
         offset,
+        phase_delay_seconds,
     )
     return TaskResponse(task_id=task_id)
 
@@ -575,11 +612,16 @@ def get_task_results(task_id: str, response: Response):
         },
     },
 )
-async def download_dataset() -> Response:
+async def download_dataset(
+    debug_phase_delay_ms: int = Query(default=0, ge=0, le=DEBUG_MAX_PHASE_DELAY_MS),
+) -> Response:
     # Same threshold pattern as /movies:
     # return direct payload for quick exports, task flow for slow exports.
+    phase_delay_seconds = _debug_delay_seconds(debug_phase_delay_ms)
     task_id = _new_task_id()
-    task = asyncio.create_task(asyncio.to_thread(_run_export, task_id))
+    task = asyncio.create_task(
+        asyncio.to_thread(_run_export, task_id, phase_delay_seconds)
+    )
     try:
         await asyncio.wait_for(asyncio.shield(task), timeout=SSE_DOWNLOAD_THRESHOLD)
     except asyncio.TimeoutError:

@@ -32,6 +32,16 @@ class TestUpload:
         assert db.tasks[task_id]["status"] == "completed"
         assert db.tasks[task_id]["progress"] == 100
 
+    def test_upload_accepts_debug_phase_delay(self, client, csv_file):
+        resp = client.post(
+            "/datasets",
+            params={"debug_phase_delay_ms": 1},
+            files={"file": ("movies.csv", io.BytesIO(csv_file), "text/csv")},
+        )
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+        assert db.tasks[task_id]["status"] == "completed"
+
     def test_upload_and_sse(self, client, csv_file):
         resp = client.post(
             "/datasets",
@@ -147,6 +157,11 @@ class TestQuery:
         assert ok.status_code == 200
         assert len(ok.json()) == 2
 
+    def test_query_accepts_debug_phase_delay(self, client, populated_db):
+        resp = client.get("/movies", params={"debug_phase_delay_ms": 1})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 6
+
     def test_query_auto_async_when_slow(self, client, populated_db, monkeypatch):
         original_run_query = movies._run_query
 
@@ -240,6 +255,12 @@ class TestAsyncQuery:
         assert task_ids[1] in db.tasks
         assert task_ids[2] in db.tasks
 
+    def test_async_query_accepts_debug_phase_delay(self, client, populated_db):
+        resp = client.post("/movies/query", params={"debug_phase_delay_ms": 1})
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+        assert db.tasks[task_id]["status"] == "completed"
+
 
 class TestDownload:
     def test_download(self, client, populated_db):
@@ -256,6 +277,11 @@ class TestDownload:
     def test_download_empty_db(self, client):
         resp = client.get("/datasets/download")
         assert resp.status_code == 404
+
+    def test_download_accepts_debug_phase_delay(self, client, populated_db):
+        resp = client.get("/datasets/download", params={"debug_phase_delay_ms": 1})
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/gzip"
 
     def test_download_auto_async_when_slow(self, client, populated_db, monkeypatch):
         original_run_export = movies._run_export

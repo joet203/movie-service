@@ -357,6 +357,23 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
     <h2>Upload &amp; Download</h2>
     <p>Ingest CSV datasets with streaming upload and atomic table replacement. Export as gzip-compressed CSV.</p>
   </div>
+  <div class="card fade-in fade-in-d1" style="margin-bottom:16px">
+    <div class="card-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2m11-11h-2M3 12H1m18.8 7.8-1.4-1.4M4.6 4.6 3.2 3.2m16.6 0-1.4 1.4M4.6 19.4l-1.4 1.4"/></svg>
+      Demo Settings
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text-secondary);cursor:pointer">
+        <input type="checkbox" id="simulateSlowToggle">
+        Simulate Slow Operations
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--text-secondary)">
+        Phase Delay (ms)
+        <input type="number" class="filter-input" id="phaseDelayMsInput" value="700" min="0" max="5000" step="100" style="width:96px">
+      </label>
+      <span style="font-size:.76rem;color:var(--text-muted)">Applies to upload, query, and download task phases.</span>
+    </div>
+  </div>
   <div class="row-2">
     <div class="card fade-in fade-in-d1">
       <div class="card-label">
@@ -391,6 +408,10 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download .csv.gz
         </button>
+        <div class="upload-status" id="downloadStatus" style="width:100%;margin-top:14px">
+          <div class="progress-track"><div class="progress-fill" id="downloadProgressFill"></div></div>
+          <div class="status-line"><span class="tag" id="downloadStatusTag">pending</span><span id="downloadProgressPct">0%</span></div>
+        </div>
       </div>
     </div>
   </div>
@@ -749,6 +770,20 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover
 dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
 fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
 
+function getDebugPhaseDelayMs() {
+  const enabled = document.getElementById('simulateSlowToggle')?.checked;
+  if (!enabled) return 0;
+  const raw = parseInt(document.getElementById('phaseDelayMsInput')?.value || '0', 10);
+  if (Number.isNaN(raw)) return 0;
+  return Math.max(0, Math.min(5000, raw));
+}
+
+function applyDebugDelay(params) {
+  const delayMs = getDebugPhaseDelayMs();
+  if (delayMs > 0) params.set('debug_phase_delay_ms', String(delayMs));
+  return params;
+}
+
 async function handleFile(file) {
   if (!file.name.endsWith('.csv')) { showToast('Please select a .csv file', 'error'); return; }
   const st = document.getElementById('uploadStatus');
@@ -763,7 +798,9 @@ async function handleFile(file) {
   st.classList.add('active');
   const form = new FormData(); form.append('file', file);
   try {
-    const r = await fetch(`${API}/datasets`, { method: 'POST', body: form });
+    const uploadParams = applyDebugDelay(new URLSearchParams());
+    const uploadSuffix = uploadParams.toString() ? `?${uploadParams}` : '';
+    const r = await fetch(`${API}/datasets${uploadSuffix}`, { method: 'POST', body: form });
     if (!r.ok) throw new Error('Upload failed: ' + r.status);
     const { task_id } = await r.json();
     tag.className = 'tag tag-processing'; tag.textContent = 'Processing';
@@ -803,7 +840,7 @@ async function searchMovies(e) {
 }
 
 function buildQueryParams() {
-  const params = new URLSearchParams();
+  const params = applyDebugDelay(new URLSearchParams());
   const g = document.getElementById('genreInput').value.trim();
   const sy = document.getElementById('startYear').value;
   const ey = document.getElementById('endYear').value;
@@ -1052,16 +1089,39 @@ async function triggerDownloadFromResponse(resp) {
 
 async function downloadDataset() {
   const btn = document.getElementById('dlBtn');
+  const status = document.getElementById('downloadStatus');
+  const fill = document.getElementById('downloadProgressFill');
+  const tag = document.getElementById('downloadStatusTag');
+  const pct = document.getElementById('downloadProgressPct');
+
+  status.classList.add('active');
+  fill.style.width = '0%';
+  fill.className = 'progress-fill';
+  tag.className = 'tag tag-pending';
+  tag.textContent = 'pending';
+  pct.textContent = '0%';
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Preparing...';
   try {
-    let r = await fetch(`${API}/datasets/download`);
+    const params = applyDebugDelay(new URLSearchParams());
+    const suffix = params.toString() ? `?${params}` : '';
+    let r = await fetch(`${API}/datasets/download${suffix}`);
     if (r.status === 202) {
       const body = await r.json();
       const taskId = body.task_id;
       await waitForTaskCompletion(taskId, (d) => {
+        fill.style.width = d.progress + '%';
+        pct.textContent = d.progress + '%';
+        tag.textContent = d.status;
+        tag.className = d.status === 'error' ? 'tag tag-error' : d.status === 'completed' ? 'tag tag-completed' : 'tag tag-processing';
         btn.innerHTML = '<div class="spinner"></div> Preparing... ' + d.progress + '%';
       });
       r = await fetch(`${API}/tasks/${taskId}/download`);
+    } else {
+      fill.style.width = '100%';
+      pct.textContent = '100%';
+      tag.className = 'tag tag-completed';
+      tag.textContent = 'completed';
+      fill.classList.add('complete');
     }
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
@@ -1069,7 +1129,13 @@ async function downloadDataset() {
     }
     await triggerDownloadFromResponse(r);
     showToast('Download started', 'success');
-  } catch (err) { showToast(err.message, 'error'); }
+  } catch (err) {
+    tag.className = 'tag tag-error';
+    tag.textContent = 'error';
+    fill.classList.add('error');
+    pct.textContent = err.message;
+    showToast(err.message, 'error');
+  }
   finally { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download .csv.gz'; }
 }
 

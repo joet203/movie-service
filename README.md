@@ -107,6 +107,16 @@ uv run pytest tests/ -v
 - `MOVIES_DB_PATH`: DuckDB file path (default: `movies.duckdb`)
 - `MOVIES_MAX_QUERY_LIMIT`: maximum allowed `limit` for `/movies` and `/movies/query` (default: `50000`)
 
+## Demo / Progress Simulation
+
+- Frontend includes a **Demo Settings** card (`Simulate Slow Operations` + `Phase Delay (ms)`).
+- This appends `debug_phase_delay_ms` to upload/query/download requests so you can force task handoff and observe SSE progress bars.
+- API also accepts this optional query param directly on:
+  - `POST /datasets`
+  - `GET /movies`
+  - `POST /movies/query`
+  - `GET /datasets/download`
+
 ## Usage Walkthrough
 
 1. **Start the server**: `make run`

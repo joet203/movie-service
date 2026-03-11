@@ -69,8 +69,13 @@ curl -X POST -F "file=@movies.csv" http://127.0.0.1:8000/datasets
 # Query by year range + genre
 curl "http://127.0.0.1:8000/movies?start_year=2020&end_year=2023&genre=Action"
 
-# Download gzipped dataset
-curl -o movies.csv.gz http://127.0.0.1:8000/datasets/download
+# Download gzipped dataset (fast path: HTTP 200 + gzip bytes)
+curl -f -o movies.csv.gz http://127.0.0.1:8000/datasets/download
+
+# If download prep is long, /datasets/download returns HTTP 202 with {"task_id":"..."}
+TASK_ID="<from_202_response>"
+curl -N "http://127.0.0.1:8000/tasks/${TASK_ID}/events"
+curl -f -o movies.csv.gz "http://127.0.0.1:8000/tasks/${TASK_ID}/download"
 ```
 
 ## Included Docs

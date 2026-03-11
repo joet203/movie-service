@@ -96,6 +96,6 @@ Measured on Apple M1, 367,314-row CSV (15.8 MB), Python 3.13, DuckDB 1.3:
 | Query (all rows) | 0.83s | 367,314 rows serialized to JSON |
 | Download (gzip) | 0.49s | 4.9 MB gzipped CSV via `StreamingResponse` |
 
-Server RSS: ~85 MB idle → ~288 MB after all operations (DuckDB buffer pool + query materialization).
+Server memory (RSS): ~85 MB idle → ~288 MB after all operations (DuckDB buffer pool + query materialization).
 
 Run benchmarks: `uv run python benchmark.py movies.csv` (requires server running on port 8000).

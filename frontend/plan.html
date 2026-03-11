@@ -263,7 +263,7 @@ pre code{background:none;border:none;padding:0;color:var(--text);font-family:'SF
   <!-- Hero -->
   <div class="hero">
     <h1>Implementation <em>Plan</em></h1>
-    <p>Architecture and design decisions documented before writing any code. This is an AI workfile created as part of the assessment deliverables.</p>
+    <p>This was the pre-implementation plan. The final implementation evolved &mdash; see <code>DESIGN.md</code> for the actual architecture. This is an AI workfile created as part of the assessment deliverables.</p>
     <div class="hero-meta">
       <span class="tag">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
@@ -312,8 +312,8 @@ pre code{background:none;border:none;padding:0;color:var(--text);font-family:'SF
     <div class="card prose">
       <ul>
         <li><strong>FastAPI + Pydantic</strong> &mdash; provided template, async-native web framework</li>
-        <li><strong>DuckDB</strong> &mdash; persistent on-disk analytical DB with <span class="explain">(an OLAP engine &mdash; a database designed for reading and analyzing large data, not small transactions)</span>, <span class="explain">(out-of-core processing &mdash; can handle data bigger than available RAM by spilling to disk)</span>, native <code>executemany</code> for bulk insert</li>
-        <li><strong>Python stdlib</strong> &mdash; <code>csv.reader</code> for parsing, <code>tempfile</code> for disk streaming, <code>asyncio.to_thread</code> for offloading blocking work</li>
+        <li><strong>DuckDB</strong> &mdash; persistent on-disk analytical DB with <span class="explain">(an OLAP engine &mdash; a database designed for reading and analyzing large data, not small transactions)</span>, <span class="explain">(out-of-core processing &mdash; can handle data bigger than available RAM by spilling to disk)</span>, native <code>read_csv</code> for direct CSV ingestion</li>
+        <li><strong>Python stdlib</strong> &mdash; <code>csv.reader</code> for header validation, <code>tempfile</code> for disk streaming</li>
         <li><strong>Python 3.13</strong> &mdash; pinned <code>&gt;=3.13,&lt;3.14</code> since pydantic-core doesn't support 3.14 yet</li>
       </ul>
       <pre><code><span class="flag">$</span> uv add duckdb python-multipart</code></pre>
@@ -499,36 +499,21 @@ pre code{background:none;border:none;padding:0;color:var(--text);font-family:'SF
           <div style="margin:20px 0">
             <p><strong>Background: <code>_ingest_csv(task_id, temp_path)</code></strong></p>
             <div class="explain-block">
-              Runs in a thread pool <span class="explain">(a set of pre-created threads ready to run work, avoiding the overhead of creating new threads)</span> via <code>asyncio.to_thread</code>. This is a synchronous function executed off the event loop. No sleeps, no artificial delays.
+              This was the initial plan, which used Python's <code>csv.reader</code> + DuckDB <code>executemany</code> for batch inserts with row-by-row progress tracking. The final implementation replaced all of that with DuckDB's native <code>read_csv</code> + <code>TRY_CAST</code> &mdash; much simpler and faster, as DuckDB handles CSV parsing in optimized C++ code instead of Python.
             </div>
+            <p>Runs as a synchronous function via <code>BackgroundTasks</code> <span class="explain">(Starlette automatically runs sync functions in a thread pool, keeping the event loop free)</span>. No sleeps, no artificial delays.</p>
             <ol>
               <li><strong>Set status</strong> to <code>"processing"</code></li>
+              <li><strong>Validate header</strong> &mdash; quick first-line read with <code>csv.reader</code>, check column names match expected schema</li>
               <li>
-                <strong>Count rows (fast pass)</strong> &mdash; iterate lines with <code>for _ in f</code>, count them, subtract 1 for header. This is a fast sequential read &mdash; no CSV parsing, just newline counting.
+                <strong>DuckDB native CSV read</strong> &mdash; <code>CREATE TABLE movies_staging AS SELECT ... FROM read_csv(...)</code> with <code>TRY_CAST</code> <span class="explain">(attempts a type conversion and returns NULL on failure instead of erroring &mdash; gracefully handles dirty data like "III" in the year column)</span>
               </li>
               <li>
-                <strong>Atomic table replace via staging</strong> <span class="explain">(atomic swap &mdash; replacing data in one indivisible operation; readers see either all old or all new data, never a mix)</span>:
-                <ul>
-                  <li><code>DROP TABLE IF EXISTS movies_staging</code></li>
-                  <li><code>CREATE TABLE movies_staging (...)</code></li>
-                  <li>Ingest all rows into <code>movies_staging</code></li>
-                  <li>After ingestion: <code>BEGIN TRANSACTION; DROP TABLE IF EXISTS movies; ALTER TABLE movies_staging RENAME TO movies; COMMIT;</code></li>
-                </ul>
+                <strong>Atomic table swap</strong> <span class="explain">(atomic swap &mdash; replacing data in one indivisible operation; readers see either all old or all new data, never a mix)</span>:
+                <code>BEGIN TRANSACTION; DROP TABLE IF EXISTS movies; ALTER TABLE movies_staging RENAME TO movies; COMMIT;</code>
               </li>
               <li>
-                <strong>Parse &amp; batch insert</strong> with <code>csv.reader</code> + <code>executemany</code> <span class="explain">(DuckDB's fastest way to insert data, bypassing SQL parsing entirely)</span>:
-                <ul>
-                  <li>Open temp file with <code>csv.reader(f)</code></li>
-                  <li>Skip and validate header row</li>
-                  <li>Parse <code>year</code> as int (or None), <code>rating</code> as float (or None)</li>
-                  <li>Accumulate tuples into batch list</li>
-                </ul>
-              </li>
-              <li>
-                <strong>Progress updates every 50,000 rows</strong> &mdash; flush batch with <code>executemany</code>, update progress. No sleeps &mdash; progress updates happen naturally at ingestion speed.
-              </li>
-              <li>
-                <strong>Finalize</strong> &mdash; execute atomic swap, <code>os.unlink(temp_path)</code>, set progress to 100%.
+                <strong>Finalize</strong> &mdash; <code>os.unlink(temp_path)</code>, set progress to 100%.
               </li>
               <li>
                 <strong>Error handling</strong> &mdash; wrap in <code>try/except</code>, clean up staging table on failure, ensure temp file is removed in <code>finally</code>.
@@ -658,13 +643,12 @@ pre code{background:none;border:none;padding:0;color:var(--text);font-family:'SF
         <div class="collapsible-content prose">
           <p>Brief document covering:</p>
           <ul>
-            <li><strong>Why DuckDB</strong> &mdash; out-of-core <span class="explain">(can handle data bigger than available RAM by spilling to disk)</span> analytical engine, zero-config, <code>executemany</code> for O(1) memory bulk insert</li>
-            <li><strong>Why stdlib-only for CSV parsing</strong> &mdash; no dependency bloat, <code>csv.reader</code> handles quoted fields correctly, senior-level restraint</li>
-            <li><strong>Memory management</strong> &mdash; streaming upload (1MB chunks), <code>executemany</code> (no SQL parsing overhead), streaming download (DuckDB native gzip + chunked file read)</li>
+            <li><strong>Why DuckDB</strong> &mdash; out-of-core <span class="explain">(can handle data bigger than available RAM by spilling to disk)</span> analytical engine, zero-config, native <code>read_csv</code> for efficient ingestion</li>
+            <li><strong>Why <code>read_csv</code> + <code>TRY_CAST</code></strong> &mdash; DuckDB parses the CSV in optimized C++ code, <code>TRY_CAST</code> gracefully handles dirty data (NULLs instead of errors), no Python-side parsing needed</li>
+            <li><strong>Memory management</strong> &mdash; streaming upload (1MB chunks), DuckDB-native CSV read (no Python-side row buffering), streaming download (DuckDB native gzip + chunked file read)</li>
             <li><strong>SSE design</strong> &mdash; dict-based task state, real progress from row counts, no artificial delays</li>
             <li><strong>Atomic data replacement</strong> &mdash; staging table + rename (no partial state visible to queries)</li>
-            <li><strong>Two-pass ingestion trade-off</strong> &mdash; counting lines first doubles file I/O but enables real progress tracking. Acceptable because the count pass is a fast sequential scan (no parsing) and OS page cache makes the second pass essentially free</li>
-            <li><strong>Trade-offs acknowledged</strong> &mdash; single-process task state (no horizontal scaling), task history not persisted across restarts</li>
+            <li><strong>Trade-offs acknowledged</strong> &mdash; single-process task state (no horizontal scaling), task history not persisted across restarts, no granular progress (DuckDB handles ingestion as one operation)</li>
           </ul>
         </div>
       </div>
@@ -781,7 +765,7 @@ pre code{background:none;border:none;padding:0;color:var(--text);font-family:'SF
   <!-- Footer -->
   <div class="footer">
     <div class="footer-line"></div>
-    AI workfile &mdash; implementation plan created before coding began.
+    AI workfile &mdash; pre-implementation plan. The final code evolved from this starting point.
   </div>
 
 </div>

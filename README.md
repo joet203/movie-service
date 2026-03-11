@@ -180,4 +180,4 @@ See [DESIGN.md](DESIGN.md) for detailed rationale. Summary:
 - **Staging table + atomic swap** for safe data replacement
 - **SSE** for real-time progress updates
 - **Streaming responses** for memory-efficient downloads
-- **Zero heavy dependencies** (no pandas/Polars — stdlib + DuckDB only)
+- **Minimal dependencies** — 2 runtime deps: `duckdb` + `python-multipart`

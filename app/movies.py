@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 import csv
 import logging
 import os
@@ -199,13 +200,13 @@ VALID_SORT_COLUMNS = {"movie_name", "year", "genres", "rating"}
 
 
 @router.get("/movies")
-async def query_movies(
+def query_movies(
     response: Response,
     start_year: int | None = None,
     end_year: int | None = None,
     genre: str | None = None,
     sort_by: str = Query(default="movie_name"),
-    sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, le=MAX_QUERY_LIMIT, ge=1),
     offset: int = Query(default=0, ge=0),
 ) -> list[Movie]:
@@ -231,10 +232,8 @@ async def query_movies(
         where += " AND genres ILIKE ? ESCAPE '\\'"
         params.append(f"%{_escape_like(genre)}%")
 
-    # Total count for pagination (reuses same WHERE clause)
-    count_params = list(params)
     total = conn.execute(
-        f"SELECT COUNT(*) FROM movies {where}", count_params
+        f"SELECT COUNT(*) FROM movies {where}", params
     ).fetchone()[0]
     response.headers["X-Total-Count"] = str(total)
 
@@ -256,10 +255,9 @@ async def query_movies(
 # ---------------------------------------------------------------------------
 
 @router.get("/datasets/download")
-async def download_dataset() -> StreamingResponse:
+def download_dataset() -> StreamingResponse:
     conn = db.get_db()
-    count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
-    if count == 0:
+    if conn.execute("SELECT 1 FROM movies LIMIT 1").fetchone() is None:
         raise HTTPException(status_code=404, detail="No data available for download")
 
     # DuckDB writes gzip-compressed CSV natively — efficient C++ path

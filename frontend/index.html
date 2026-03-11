@@ -191,7 +191,11 @@ section:first-of-type{padding-top:100px}
 .table-scroll::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
 table{width:100%;border-collapse:collapse;font-size:.84rem}
 thead{position:sticky;top:0;z-index:2}
-thead th{text-align:left;padding:10px 14px;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);background:var(--bg-section);border-bottom:1px solid var(--border)}
+thead th{text-align:left;padding:10px 14px;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);background:var(--bg-section);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;transition:color .15s;white-space:nowrap}
+thead th:hover{color:var(--accent)}
+thead th .sort-arrow{display:inline-block;margin-left:4px;font-size:.6rem;opacity:.4;transition:opacity .15s}
+thead th.sort-active{color:var(--accent)}
+thead th.sort-active .sort-arrow{opacity:1}
 tbody tr{border-bottom:1px solid var(--border-light);transition:background .12s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--accent-subtle)}
@@ -334,7 +338,10 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
 <!-- ═══ HERO ═══ -->
 <section class="hero fade-in" id="top">
   <h1>A <em>Movie Database</em> Service</h1>
-  <p>FastAPI + DuckDB. Upload, query, and download movie datasets with real-time progress tracking and out-of-core analytical performance.</p>
+  <p>FastAPI + DuckDB. Upload, query, and download movie datasets with streaming ingestion and real-time progress tracking.</p>
+  <div style="margin-top:14px"><a href="/docs" target="_blank" class="btn btn-outline" style="font-size:.82rem">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Swagger API Docs</a></div>
   <div class="hero-stats">
     <div class="hero-stat"><div class="val" id="statRows">&mdash;</div><div class="label">Movies Loaded</div></div>
     <div class="hero-stat"><div class="val">0.52s</div><div class="label">Ingest Time</div></div>
@@ -462,7 +469,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
     </div>
     <div class="stat-card">
       <div class="stat-val">85<span class="stat-unit">MB</span></div>
-      <div class="stat-label">Server Idle RSS</div>
+      <div class="stat-label">Server Idle Memory</div>
       <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:30%"></div></div>
     </div>
   </div>
@@ -511,11 +518,11 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
 
     <div class="collapsible">
       <button class="collapsible-trigger" onclick="toggleCollapsible(this)">
-        <div><h3>No pandas, no Polars</h3><div class="desc">Deliberate dependency restraint</div></div>
+        <div><h3>Minimal Dependencies</h3><div class="desc">2 runtime deps: duckdb + python-multipart</div></div>
         <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="collapsible-body"><div class="collapsible-inner">
-        The task is CSV &rarr; database &rarr; query. Adding a 200+ MB dependency for something DuckDB handles natively would be over-engineering. Python's <code>csv.reader</code> is used only for header validation (one line). DuckDB does the heavy lifting. Only 2 runtime dependencies: <code>duckdb</code> and <code>python-multipart</code>.
+        DuckDB handles CSV parsing, querying, and gzip export natively. Python's <code>csv.reader</code> is used only for header validation (one line). No heavy data processing libraries needed.
       </div></div>
     </div>
 
@@ -843,7 +850,15 @@ async function fetchMovies() {
         const rp = m.rating != null ? (m.rating / 10 * 100) : 0;
         rows += '<tr><td>' + esc(m.movie_name) + '</td><td>' + (m.year ?? '&mdash;') + '</td><td>' + genres + '</td><td><div class="rating-visual"><span>' + rv + '</span><div class="rating-bar"><div class="rating-bar-fill" style="width:' + rp + '%"></div></div></div></td></tr>';
       }
-      area.innerHTML = '<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Title</th><th>Year</th><th>Genres</th><th>Rating</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      const sb = document.getElementById('sortBy').value;
+      const so = document.getElementById('sortOrder').value;
+      const cols = [{label:'Title',key:'movie_name'},{label:'Year',key:'year'},{label:'Genres',key:'genres'},{label:'Rating',key:'rating'}];
+      const ths = cols.map(c => {
+        const active = sb === c.key;
+        const arrow = active ? (so === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;';
+        return '<th class="' + (active ? 'sort-active' : '') + '" onclick="sortByColumn(\'' + c.key + '\')">' + c.label + ' <span class="sort-arrow">' + arrow + '</span></th>';
+      }).join('');
+      area.innerHTML = '<div class="table-wrap"><div class="table-scroll"><table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }
 
     // Pagination
@@ -859,6 +874,19 @@ async function fetchMovies() {
     btn.disabled = false;
     btn.innerHTML = 'Search';
   }
+}
+
+function sortByColumn(col) {
+  const sbEl = document.getElementById('sortBy');
+  const soEl = document.getElementById('sortOrder');
+  if (sbEl.value === col) {
+    soEl.value = soEl.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sbEl.value = col;
+    soEl.value = col === 'rating' ? 'desc' : 'asc';
+  }
+  currentPage = 0;
+  fetchMovies();
 }
 
 function changePage(dir) {

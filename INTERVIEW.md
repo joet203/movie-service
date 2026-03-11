@@ -110,14 +110,11 @@ The CSV has entries like `"III"` in the year column and irregular quoting (`"""G
 
 ### "What would you add with more time?"
 
-- **Pagination** on the query endpoint
-- **Input validation** on genre (whitelist of valid genres)
 - **Rate limiting** on upload endpoint
-- **Persistent task state** (Redis)
-- **OpenTelemetry** instrumentation
-- **CI/CD** pipeline with automated testing
+- **Persistent task state** (Redis + Celery for job queue)
 - **Docker** containerization for consistent deployment
-- **API versioning** for backwards compatibility
+- **CI/CD** pipeline with automated testing
+- **OpenTelemetry** instrumentation for observability
 
 ### "How did you use AI tools?"
 

@@ -256,14 +256,14 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>DuckDB is an embedded <span class="jargon">OLAP engine<span class="jargon-def">A database optimized for analyzing large datasets rather than processing small transactions</span></span> &mdash; optimized for scanning and filtering large datasets, not transactional workloads. Key advantages:</p>
+        <p>DuckDB is an embedded <span class="jargon">OLAP engine<span class="jargon-def">A database optimized for analyzing large datasets rather than processing small transactions</span></span> built for scanning and filtering large datasets. Key advantages:</p>
         <ul>
-          <li><strong><span class="jargon">Out-of-core<span class="jargon-def">Can process data larger than available RAM by spilling to disk</span></span>:</strong> Spills to disk when data exceeds RAM. Handles datasets far larger than memory.</li>
-          <li><strong>Columnar storage:</strong> Filter predicates are pushed down to the scan layer <span class="jargon-inline">(filters are applied at the data-reading level so unnecessary data is never loaded)</span>. Only relevant columns are read.</li>
-          <li><strong>Native CSV read:</strong> <code>read_csv</code> parses CSV in C++, orders of magnitude faster than Python-side parsing.</li>
+          <li><strong><span class="jargon">Out-of-core<span class="jargon-def">Can process data larger than available RAM by spilling to disk</span></span>:</strong> Spills to disk when data exceeds RAM.</li>
+          <li><strong>Columnar storage:</strong> <span class="jargon">Predicate pushdown<span class="jargon-def">Filters are applied at the data-reading level so unnecessary data is never loaded</span></span> means only relevant columns and rows are read.</li>
+          <li><strong>Native CSV read:</strong> <code>read_csv</code> parses in C++, orders of magnitude faster than Python-side parsing.</li>
           <li><strong>No server:</strong> Runs in-process, zero configuration.</li>
         </ul>
-        <p>SQLite is row-oriented (OLTP) &mdash; great for transactions, poor for analytical scans. PostgreSQL would work but adds operational complexity for a service that runs on a single machine.</p>
+        <p>SQLite is row-oriented &mdash; poor for analytical scans. PostgreSQL would work but adds operational complexity for a single-machine service.</p>
       </div>
     </div>
   </div>
@@ -294,12 +294,18 @@ footer p{font-size:.78rem;color:var(--text-muted)}
   <!-- Q3 -->
   <div class="accordion" data-accordion>
     <button class="accordion-trigger" aria-expanded="false">
-      <span><span class="q-num">Q3</span>&ensp; Why not use pandas or Polars?</span>
+      <span><span class="q-num">Q3</span>&ensp; How does error handling work?</span>
       <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>Deliberate restraint. The task is CSV &rarr; database &rarr; query. Adding a 200+ MB dependency for something DuckDB handles natively would be over-engineering. Python's <code>csv.reader</code> is used only for header validation (one line). DuckDB does the heavy lifting.</p>
+        <p>Errors are handled at each layer:</p>
+        <ul>
+          <li><strong>Upload:</strong> Header validation rejects malformed CSVs before ingestion starts. If DuckDB ingestion fails, the staging table is dropped and the original data is untouched.</li>
+          <li><strong>Query:</strong> Invalid parameters return <code>422</code> via Pydantic validation. Querying before any data is uploaded returns <code>404</code>.</li>
+          <li><strong>Download:</strong> Returns <code>404</code> if no dataset has been uploaded yet.</li>
+          <li><strong>Task tracking:</strong> Unknown task IDs return <code>404</code>. Failed tasks include an error message in the SSE stream.</li>
+        </ul>
       </div>
     </div>
   </div>
@@ -312,8 +318,8 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>The first version used Python's <code>csv.reader</code> to iterate row-by-row, parse types manually, accumulate 50K-row batches, and call <span class="jargon"><code>executemany</code><span class="jargon-def">A database method that runs the same SQL statement repeatedly with different values, batching the work</span></span>. This round-trips every row through Python.</p>
-        <p>The optimized version uses DuckDB's <code>read_csv</code> &mdash; the CSV is parsed in DuckDB's C++ engine, never touching Python. <code>TRY_CAST</code> replaces manual type parsing. Same correctness, <strong>170x faster</strong>.</p>
+        <p>The first version used Python's <code>csv.reader</code> row-by-row with <span class="jargon"><code>executemany</code><span class="jargon-def">A database method that runs the same SQL statement repeatedly with different values, batching the work</span></span> in 50K-row batches &mdash; every row round-tripped through Python.</p>
+        <p>The fix: let DuckDB's <code>read_csv</code> handle everything in C++. <code>TRY_CAST</code> replaces manual type parsing. Same correctness, <strong>170x faster</strong>.</p>
       </div>
     </div>
   </div>
@@ -326,8 +332,8 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>The upload endpoint returns <code>202 Accepted</code> with a <code>task_id</code>. Progress is tracked in a Python dict <span class="jargon-inline">(<span class="jargon">GIL-safe<span class="jargon-def">Python's threading model guarantees simple operations like updating a dictionary won't cause data corruption</span></span> for single-process)</span>. The <span class="jargon">SSE<span class="jargon-def">Server-Sent Events &mdash; a standard HTTP mechanism for the server to push updates to the browser</span></span> endpoint (<code>/tasks/{id}/events</code>) polls this dict and emits events when state changes.</p>
-        <p>With the DuckDB native reader, ingestion is sub-second for the test dataset, so progress goes 0 &rarr; 100 almost instantly. For truly massive files (GB+), the DuckDB operation would take longer and the SSE mechanism still reports the transition. In a production system with longer ingestion, you'd add more granular progress hooks.</p>
+        <p>Upload returns <code>202 Accepted</code> with a <code>task_id</code>. Task state lives in a Python dict <span class="jargon-inline">(<span class="jargon">GIL-safe<span class="jargon-def">Python's threading model guarantees simple operations like updating a dictionary won't cause data corruption</span></span> for single-process)</span>. The <span class="jargon">SSE<span class="jargon-def">Server-Sent Events &mdash; a standard HTTP mechanism for the server to push updates to the browser</span></span> endpoint (<code>/tasks/{id}/events</code>) polls this dict and emits events on state changes.</p>
+        <p>For the test dataset, ingestion is sub-second so progress jumps straight to 100%. For GB+ files, the SSE mechanism would report longer transitions &mdash; you'd add more granular progress hooks in production.</p>
       </div>
     </div>
   </div>
@@ -340,12 +346,7 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>DuckDB is <span class="jargon">single-writer<span class="jargon-def">Only one process can write to the database at a time; concurrent writes will block or fail</span></span>. If two uploads arrive simultaneously, the second would fail to acquire the write lock. In production:</p>
-        <ul>
-          <li>Use a task queue (<span class="jargon">Celery/Dramatiq<span class="jargon-def">Python libraries for running background jobs across multiple workers, typically paired with a message broker like Redis</span></span>) to serialize ingestion jobs</li>
-          <li>Return <code>409 Conflict</code> if an ingestion is already in progress</li>
-          <li>Or queue uploads and process sequentially</li>
-        </ul>
+        <p>DuckDB is <span class="jargon">single-writer<span class="jargon-def">Only one process can write to the database at a time; concurrent writes will block or fail</span></span>, so concurrent uploads would conflict. In production you'd serialize ingestion through a task queue (<span class="jargon">Celery<span class="jargon-def">A Python library for running background jobs across multiple workers, typically paired with a message broker like Redis</span></span>), or return <code>409 Conflict</code> if an ingestion is already in progress.</p>
       </div>
     </div>
   </div>
@@ -358,12 +359,7 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>Correct. This is a conscious trade-off for a single-process take-home. In production:</p>
-        <ul>
-          <li>Task state &rarr; <span class="jargon">Redis<span class="jargon-def">An in-memory data store commonly used for caching, session storage, and job queues</span></span> or database-backed store</li>
-          <li>Job execution &rarr; Celery/Dramatiq with a message broker</li>
-          <li>Horizontal scaling &rarr; multiple workers sharing external state</li>
-        </ul>
+        <p>Correct &mdash; conscious trade-off for a single-process assessment. In production, task state would go in <span class="jargon">Redis<span class="jargon-def">An in-memory data store commonly used for caching, session storage, and job queues</span></span>, job execution in Celery with a message broker, and horizontal scaling via multiple workers sharing that external state.</p>
       </div>
     </div>
   </div>
@@ -376,12 +372,12 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>DuckDB handles this out of the box &mdash; out-of-core processing spills to disk. But the API layer would need changes:</p>
+        <p>DuckDB handles this out of the box &mdash; out-of-core processing spills to disk. API-level changes:</p>
         <ul>
-          <li><strong>Pagination:</strong> Already implemented with <code>limit</code>/<code>offset</code> params and <code>X-Total-Count</code> header. For cursor-based pagination at extreme scale, switch to <span class="jargon">keyset pagination<span class="jargon-def">A more efficient way to page through large datasets using the last seen value instead of counting rows to skip</span></span>.</li>
-          <li><strong>Streaming responses:</strong> For very large result sets, stream JSON lines instead of building a full list.</li>
-          <li><strong>Ingestion:</strong> DuckDB's <code>read_csv</code> scales linearly. Even at 100M rows it would be minutes, not hours.</li>
-          <li><strong>Download:</strong> Already streaming &mdash; no memory concerns.</li>
+          <li><strong>Pagination:</strong> Already implemented (<code>limit</code>/<code>offset</code> + <code>X-Total-Count</code> header). At extreme scale, switch to <span class="jargon">keyset pagination<span class="jargon-def">A more efficient way to page through large datasets using the last seen value instead of counting rows to skip</span></span>.</li>
+          <li><strong>Streaming:</strong> For very large result sets, stream JSON lines instead of building a full list.</li>
+          <li><strong>Ingestion:</strong> <code>read_csv</code> scales linearly &mdash; 100M rows would be minutes, not hours.</li>
+          <li><strong>Download:</strong> Already streaming, no memory concerns.</li>
         </ul>
       </div>
     </div>
@@ -395,14 +391,7 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>Progress reporting is unidirectional (server &rarr; client). SSE is simpler:</p>
-        <ul>
-          <li>No upgrade handshake</li>
-          <li>Standard HTTP</li>
-          <li>Native browser support via <span class="jargon"><code>EventSource</code> API<span class="jargon-def">A built-in browser feature for receiving server-pushed updates over a persistent HTTP connection</span></span></li>
-          <li>Auto-reconnection built in</li>
-        </ul>
-        <p>WebSockets would be overkill for one-way status updates.</p>
+        <p>Progress updates are one-way (server &rarr; client), so SSE is the right fit. It's plain HTTP with native browser support via <span class="jargon"><code>EventSource</code><span class="jargon-def">A built-in browser API for receiving server-pushed updates over a persistent HTTP connection, with auto-reconnection</span></span> &mdash; no upgrade handshake, no extra libraries. WebSockets would be overkill here.</p>
       </div>
     </div>
   </div>
@@ -415,9 +404,9 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>DuckDB is an OLAP engine where denormalized data is idiomatic. <span class="jargon"><code>ILIKE</code><span class="jargon-def">Case-insensitive pattern matching in SQL &mdash; like LIKE but ignores uppercase/lowercase differences</span></span> (case-insensitive) is pushed down to the scan layer and runs in C++. A <span class="jargon">junction table<span class="jargon-def">A separate table that maps relationships (e.g., movies-to-genres), common in normalized relational databases</span></span> would add join complexity with no performance benefit &mdash; the filtered query returns 8,377 rows in <strong>0.03s</strong>.</p>
+        <p>Denormalized data is idiomatic in OLAP. <span class="jargon"><code>ILIKE</code><span class="jargon-def">Case-insensitive pattern matching in SQL &mdash; like LIKE but ignores uppercase/lowercase differences</span></span> is pushed down to DuckDB's scan layer and runs in C++. A <span class="jargon">junction table<span class="jargon-def">A separate table that maps relationships (e.g., movies-to-genres), common in normalized relational databases</span></span> would add join complexity with no benefit &mdash; filtered queries return in <strong>0.03s</strong>.</p>
         <div class="callout">
-          <strong>Trade-off:</strong> Substring matching could produce false positives (<code>"Drama"</code> matching <code>"Melodrama"</code>), but the dataset's genre vocabulary doesn't have such conflicts. If it did, you'd split on commas and use <code>list_contains</code>.
+          <strong>Trade-off:</strong> Substring matching could false-positive (<code>"Drama"</code> matching <code>"Melodrama"</code>), but this dataset's genre vocabulary has no such conflicts. If it did, you'd split on commas and use <code>list_contains</code>.
         </div>
       </div>
     </div>
@@ -431,7 +420,7 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </button>
     <div class="accordion-body">
       <div class="accordion-content">
-        <p>The CSV has entries like <code>"III"</code> in the year column and irregular quoting (<code>"""Giliap"""</code>). DuckDB's <span class="jargon"><code>TRY_CAST</code><span class="jargon-def">Attempts type conversion, returns NULL instead of crashing on bad data</span></span> converts unparseable values to <code>NULL</code> instead of failing. <code>strict_mode=false</code> tolerates quoting issues. This matches the behavior of the original Python-side parsing (which had try/except blocks) but runs in C++.</p>
+        <p>The CSV has values like <code>"III"</code> in the year column and irregular quoting (<code>"""Giliap"""</code>). DuckDB's <span class="jargon"><code>TRY_CAST</code><span class="jargon-def">Attempts type conversion, returns NULL instead of crashing on bad data</span></span> converts unparseable values to <code>NULL</code> instead of failing, and <code>strict_mode=false</code> tolerates quoting issues. Same behavior as the original Python try/except approach, but in C++.</p>
       </div>
     </div>
   </div>
@@ -445,14 +434,11 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     <div class="accordion-body">
       <div class="accordion-content">
         <div class="additions-grid">
-          <div class="addition-item">Pagination on the query endpoint</div>
-          <div class="addition-item">Input validation on genre (whitelist)</div>
           <div class="addition-item">Rate limiting on upload endpoint</div>
-          <div class="addition-item">Persistent task state (Redis)</div>
-          <div class="addition-item">OpenTelemetry instrumentation</div>
-          <div class="addition-item">CI/CD pipeline with tests</div>
+          <div class="addition-item">Persistent task state (Redis + Celery)</div>
           <div class="addition-item">Docker containerization</div>
-          <div class="addition-item">API versioning</div>
+          <div class="addition-item">CI/CD pipeline with tests</div>
+          <div class="addition-item">OpenTelemetry instrumentation</div>
         </div>
       </div>
     </div>
@@ -519,7 +505,7 @@ footer p{font-size:.78rem;color:var(--text-muted)}
     </div>
     <div class="stat-card">
       <div class="stat-val">~85 <span class="stat-unit">MB</span></div>
-      <div class="stat-label">Server idle RSS</div>
+      <div class="stat-label">Server idle memory</div>
       <div class="stat-bar-wrap"><div class="stat-bar-inner" style="width:8.5%"></div></div>
     </div>
     <div class="stat-card">

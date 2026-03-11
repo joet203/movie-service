@@ -247,7 +247,7 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
   <!-- Hero -->
   <div class="hero fade-up">
     <h1>Design <em>Choices</em></h1>
-    <p>Architecture decisions behind the Movie Database Service: why each approach was chosen, what trade-offs were made, and how it would evolve at scale.</p>
+    <p>Architecture decisions behind the Movie Database Service and the reasoning for each.</p>
   </div>
 
   <!-- Table of Contents -->
@@ -260,9 +260,9 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
       <li><a href="#memory">Memory Management</a></li>
       <li><a href="#background-tasks">Background Tasks + SSE</a></li>
       <li><a href="#atomic">Atomic Data Replacement</a></li>
-      <li><a href="#sse-vs-ws">SSE over WebSockets</a></li>
-      <li><a href="#year-range">Year vs Date Range</a></li>
-      <li><a href="#genre">Genre Filtering Strategy</a></li>
+      <li><a href="#sse-vs-ws">SSE for Progress Updates</a></li>
+      <li><a href="#year-range">Year Range</a></li>
+      <li><a href="#genre">Genre Filtering</a></li>
       <li><a href="#task-state">Task State: In-Memory Dict</a></li>
       <li><a href="#benchmarks">Benchmarks</a></li>
     </ul>
@@ -275,37 +275,37 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
     <span class="section-tag">Architecture</span>
     <h2>Overview</h2>
     <p>
-      Uploads are streamed to disk in chunks to avoid buffering the full file in application memory.
-      Querying and storage are handled with <span class="jargon"><span class="jargon-term">DuckDB</span></span>
-      because it supports efficient analytical filtering on
-      <span class="jargon"><span class="jargon-term">columnar data</span></span>
-      and can operate
+      Uploads are streamed to disk in chunks &mdash; the full file never sits in application memory.
+      Storage and querying use <span class="jargon"><span class="jargon-term">DuckDB</span></span>,
+      which stores data in
+      <span class="jargon"><span class="jargon-term">columnar</span></span>
+      format and can operate
       <span class="jargon"><span class="jargon-term">out-of-core</span></span>
       on datasets larger than available RAM.
     </p>
-    <span class="jargon-explain">Columnar storage means data is stored by column rather than by row, which is dramatically faster when a query only needs certain fields. Out-of-core processing means the database can handle data bigger than your computer's RAM by temporarily spilling to disk.</span>
+    <span class="jargon-explain">Columnar storage organizes data by column rather than by row, making analytical filters much faster. Out-of-core means the database can handle data bigger than RAM by spilling to disk.</span>
 
     <p>
-      Long-running ingestion is decoupled from the request/response cycle using background task execution plus in-memory task status tracking. The endpoint returns <code>202 Accepted</code> immediately with a task ID. Progress updates are exposed via
+      Ingestion runs in the background. The upload endpoint returns <code>202 Accepted</code> immediately with a task ID, and progress is pushed to the client via
       <span class="jargon"><span class="jargon-term">Server-Sent Events (SSE)</span></span>.
     </p>
-    <span class="jargon-explain">SSE is a way for the server to push real-time updates to the browser over a standard HTTP connection. Unlike WebSockets, it's one-directional (server to client) and requires no special handshake.</span>
+    <span class="jargon-explain">SSE lets the server push real-time updates to the browser over a standard HTTP connection &mdash; one-directional, no special handshake.</span>
 
     <p>
-      Data replacement uses a
-      <span class="jargon"><span class="jargon-term">staging table</span></span>
-      pattern &mdash; new data is ingested into <code>movies_staging</code>, then atomically swapped into <code>movies</code> via a transaction. This ensures queries always see a complete dataset, never partial ingestion state.
+      New data is loaded into a
+      <span class="jargon"><span class="jargon-term">staging table</span></span>,
+      then atomically swapped into the live table via a transaction. Queries always see a complete dataset.
     </p>
-    <span class="jargon-explain">A staging table is a temporary holding area for new data. By loading data there first, the live table is never in an incomplete state. Once the staging table is ready, it replaces the live table in a single atomic operation.</span>
+    <span class="jargon-explain">A staging table is a temporary holding area. The live table is never in an incomplete state &mdash; once staging is ready, it replaces the live table in a single atomic operation.</span>
 
     <p>
-      Large downloads are returned with <code>StreamingResponse</code> over a DuckDB-generated gzip file, so the response is streamed incrementally in 64 KB chunks rather than materialized in memory.
+      Downloads use <code>StreamingResponse</code> over a DuckDB-generated gzip file, streamed in 64 KB chunks.
     </p>
 
     <div class="highlight-card">
       <p>
-        <strong>Production note:</strong> For this take-home, in-process task state (a Python dict) was chosen for simplicity.
-        In production, job execution and status state would be externalized (e.g., Redis, a task queue) to support horizontal scaling and persistence across restarts.
+        <strong>Production note:</strong> Task state uses an in-process Python dict for simplicity.
+        In production, this would be externalized (e.g., Redis) for horizontal scaling and persistence.
       </p>
     </div>
   </div>
@@ -321,9 +321,9 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
     <p>
       DuckDB is an embedded
       <span class="jargon"><span class="jargon-term">OLAP</span></span>
-      database that runs in-process &mdash; no separate server needed. Unlike transactional databases (PostgreSQL, MySQL) which are optimized for many small reads and writes, OLAP engines are designed for scanning and filtering large volumes of data efficiently.
+      database &mdash; runs in-process, no separate server needed. Optimized for scanning and filtering large volumes of data.
     </p>
-    <span class="jargon-explain">OLAP stands for Online Analytical Processing. It's a category of database optimized for reading and analyzing large amounts of data (aggregations, filters, scans), rather than for frequent small updates like inserting one row at a time.</span>
+    <span class="jargon-explain">OLAP (Online Analytical Processing) databases are built for reading and analyzing large datasets (aggregations, filters, scans), not for frequent small row-by-row updates.</span>
   </div>
 
   <!-- DuckDB Feature Collapsibles -->
@@ -402,7 +402,7 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
     <span class="section-tag">Performance</span>
     <h2>CSV Ingestion Strategy</h2>
     <p>
-      CSV ingestion uses DuckDB's built-in <code>read_csv</code> function rather than Python-side parsing. This was an intentional optimization &mdash; an initial implementation using Python's <code>csv.reader</code> with <code>executemany</code> batching was dramatically slower.
+      CSV ingestion uses DuckDB's built-in <code>read_csv</code> function. An initial version using Python's <code>csv.reader</code> was dramatically slower:
     </p>
 
     <!-- Before/After comparison -->
@@ -537,11 +537,11 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
     <span class="section-tag">Concurrency</span>
     <h2>Background Tasks + SSE</h2>
     <p>
-      CSV ingestion runs as a <code>BackgroundTasks</code> function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free. The
+      Ingestion runs via <code>BackgroundTasks</code> in a thread pool, keeping the event loop free. The
       <span class="jargon"><span class="jargon-term">SSE</span></span>
-      endpoint polls task state and emits events when status changes.
+      endpoint polls task state and emits progress events.
     </p>
-    <span class="jargon-explain">SSE (Server-Sent Events) is a built-in browser API where the server pushes updates to the client over a single HTTP connection. The browser's EventSource object handles reconnection automatically.</span>
+    <span class="jargon-explain">SSE (Server-Sent Events) is a built-in browser API where the server pushes updates over a single HTTP connection. The browser's EventSource handles reconnection automatically.</span>
   </div>
 
   <hr class="divider">
@@ -577,7 +577,7 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
       </div>
     </div>
 
-    <p>Queries always see either the complete old dataset or the complete new one. If ingestion fails, the staging table is dropped and the original <code>movies</code> table is preserved.</p>
+    <p>Queries always see a complete dataset. If ingestion fails, the staging table is dropped and the original data is preserved.</p>
   </div>
 
   <hr class="divider">
@@ -587,12 +587,12 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
   <!-- ══════════════════════════════════════════ -->
   <div class="doc-section fade-up" id="sse-vs-ws">
     <span class="section-tag">Real-Time</span>
-    <h2>SSE over WebSockets</h2>
+    <h2>SSE for Progress Updates</h2>
     <p>
       <span class="jargon"><span class="jargon-term">Server-Sent Events</span></span>
-      was chosen over WebSockets because progress reporting is unidirectional (server to client). SSE uses standard HTTP with no upgrade handshake, and has native browser support via the <code>EventSource</code> API.
+      was chosen because progress reporting is one-way (server to client). SSE uses standard HTTP, has native browser support via <code>EventSource</code>, and works well with proxies and load balancers.
     </p>
-    <span class="jargon-explain">WebSockets create a two-way communication channel and require a protocol upgrade handshake. Since we only need to send updates from the server to the browser (not the other way around), SSE is simpler, lighter, and has better compatibility with proxies and load balancers.</span>
+    <span class="jargon-explain">SSE is a built-in browser API where the server pushes updates over a single HTTP connection. No upgrade handshake or special protocol needed.</span>
   </div>
 
   <hr class="divider">
@@ -602,9 +602,9 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
   <!-- ══════════════════════════════════════════ -->
   <div class="doc-section fade-up" id="year-range">
     <span class="section-tag">API Design</span>
-    <h2>Year vs Date Range</h2>
+    <h2>Year Range</h2>
     <p>
-      The CSV data only contains a <code>year</code> column, not a full date. The query API uses <code>start_year</code> / <code>end_year</code> as an honest interpretation of the "date range" requirement &mdash; rather than fabricating fake month/day values to match a date-based API.
+      The CSV only has a <code>year</code> column, so the query API uses <code>start_year</code> / <code>end_year</code> rather than fabricating full dates.
     </p>
   </div>
 
@@ -615,15 +615,12 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
   <!-- ══════════════════════════════════════════ -->
   <div class="doc-section fade-up" id="genre">
     <span class="section-tag">Query Strategy</span>
-    <h2>Genre Filtering: LIKE vs Normalization</h2>
+    <h2>Genre Filtering</h2>
     <p>
-      Genres are stored as a single comma-separated string rather than normalized into a junction table:
+      Genres are stored as a comma-separated string, which is idiomatic for
+      <span class="jargon"><span class="jargon-term">OLAP</span></span>
+      engines like DuckDB. Filtering uses <code>ILIKE '%Action%'</code> (case-insensitive), which is pushed down to the scan layer for efficiency.
     </p>
-    <ul>
-      <li>DuckDB is an <span class="jargon"><span class="jargon-term">OLAP</span></span> engine where denormalized data is idiomatic</li>
-      <li><code>ILIKE '%Action%'</code> (case-insensitive) is pushed down to DuckDB's scan layer and is efficient on columnar data</li>
-      <li>A junction table would add join complexity with no performance benefit for analytical workloads</li>
-    </ul>
 
     <div class="tradeoff">
       Substring matching could theoretically produce false positives (e.g., "Drama" matching "Melodrama"), but the dataset's genre vocabulary doesn't contain such conflicts.
@@ -640,16 +637,16 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
     <h2>Task State: In-Memory Dict</h2>
     <p>Task progress is tracked in a plain Python dict:</p>
     <ul>
-      <li>Single-process FastAPI &mdash; no cross-process state needed</li>
+      <li>Single-process &mdash; no cross-process state needed</li>
       <li>Dict mutations are <span class="jargon"><span class="jargon-term">GIL</span></span>-safe between the background thread and SSE generator
-        <span class="jargon-explain">Python's Global Interpreter Lock (GIL) ensures only one thread runs Python bytecode at a time. This makes simple dict read/write operations inherently thread-safe without needing explicit locks.</span>
+        <span class="jargon-explain">Python's Global Interpreter Lock (GIL) ensures only one thread runs Python bytecode at a time, making simple dict operations thread-safe without explicit locks.</span>
       </li>
-      <li>Task state is ephemeral by nature &mdash; it only needs to survive until the client reads it</li>
+      <li>Ephemeral by nature &mdash; only needs to survive until the client reads it</li>
     </ul>
 
     <div class="highlight-card">
       <p>
-        <strong>Production upgrade:</strong> This would be replaced with Redis or a database-backed solution for horizontal scaling and persistence across restarts.
+        <strong>Production upgrade:</strong> Replace with Redis or a database-backed solution for horizontal scaling and persistence.
       </p>
     </div>
   </div>
@@ -695,7 +692,7 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
 
     <!-- Memory -->
     <div class="memory-stat">
-      <div class="mem-label">Server <span class="jargon"><span class="jargon-term" style="font-size:inherit">RSS</span></span></div>
+      <div class="mem-label">Server Memory</div>
       <div class="mem-bar">
         <div class="mem-bar-idle" style="width:29.5%"></div>
         <div class="mem-bar-peak" style="width:29.5%" id="memBarPeak"></div>
@@ -706,7 +703,7 @@ pre code{background:none;padding:0;color:var(--text-secondary)}
         <span style="color:var(--text)">288 MB peak</span>
       </div>
     </div>
-    <span class="jargon-explain" style="margin-top:8px">RSS (Resident Set Size) is how much actual physical RAM a process is currently using, as opposed to virtual memory it has reserved. This includes DuckDB's internal buffer pool and query materialization buffers.</span>
+    <span class="jargon-explain" style="margin-top:8px">Physical RAM used by the server process, including DuckDB's internal buffer pool and query materialization buffers.</span>
 
     <div style="text-align:center;margin-top:24px">
       <p style="font-size:.85rem;color:var(--text-muted)">

@@ -106,6 +106,7 @@ uv run pytest tests/ -v
 
 - `MOVIES_DB_PATH`: DuckDB file path (default: `movies.duckdb`)
 - `MOVIES_MAX_QUERY_LIMIT`: maximum allowed `limit` for `/movies` and `/movies/query` (default: `50000`)
+- `MOVIES_TASK_POLL_INTERVAL_SECONDS`: SSE task polling interval for `/tasks/{id}/events` (default: `0.2`)
 
 ## Demo / Progress Simulation
 

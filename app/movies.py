@@ -29,6 +29,7 @@ MAX_QUERY_LIMIT_ENV = "MOVIES_MAX_QUERY_LIMIT"
 SSE_QUERY_THRESHOLD = 2.0  # seconds
 SSE_DOWNLOAD_THRESHOLD = 2.0  # seconds
 DEBUG_MAX_PHASE_DELAY_MS = 5_000
+DEFAULT_TASK_POLL_INTERVAL_SECONDS = 0.2
 TASK_TTL_SECONDS = 15 * 60
 TASK_MAX_COUNT = 500
 TERMINAL_STATES = {"completed", "error"}
@@ -79,6 +80,29 @@ def _debug_delay_seconds(debug_phase_delay_ms: int) -> float:
 def _sleep_phase(seconds: float) -> None:
     if seconds > 0:
         time.sleep(seconds)
+
+
+def get_task_poll_interval_seconds() -> float:
+    raw = os.getenv("MOVIES_TASK_POLL_INTERVAL_SECONDS")
+    if raw is None:
+        return DEFAULT_TASK_POLL_INTERVAL_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid MOVIES_TASK_POLL_INTERVAL_SECONDS %r; using default %.2f",
+            raw,
+            DEFAULT_TASK_POLL_INTERVAL_SECONDS,
+        )
+        return DEFAULT_TASK_POLL_INTERVAL_SECONDS
+    if value <= 0:
+        logger.warning(
+            "Invalid MOVIES_TASK_POLL_INTERVAL_SECONDS %r; must be > 0, using default %.2f",
+            raw,
+            DEFAULT_TASK_POLL_INTERVAL_SECONDS,
+        )
+        return DEFAULT_TASK_POLL_INTERVAL_SECONDS
+    return value
 
 
 def get_max_query_limit() -> int:
@@ -452,6 +476,7 @@ async def task_events(task_id: str) -> StreamingResponse:
 async def _event_generator(task_id: str):
     """Yield SSE events until the task completes or errors."""
     last_progress = -1
+    poll_interval_seconds = get_task_poll_interval_seconds()
     while True:
         task = db.get_task(task_id)
         if task is None:
@@ -472,7 +497,7 @@ async def _event_generator(task_id: str):
             break
 
         # Non-blocking poll interval — yields control to the event loop
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(poll_interval_seconds)
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ router = APIRouter()
 EXPECTED_HEADERS = ["movie_name", "year", "genres", "rating"]
 CHUNK_SIZE = 1024 * 1024        # 1 MB for upload streaming
 DOWNLOAD_CHUNK = 65_536          # 64 KB for download streaming
-MAX_UPLOAD_BYTES = 500_000_000   # 500 MB upload limit
+MAX_UPLOAD_BYTES = 10_000_000_000  # 10 GB upload limit
 DEFAULT_QUERY_LIMIT = 1000
 MAX_QUERY_LIMIT = 10_000
 
@@ -53,7 +53,7 @@ async def upload_dataset(
                 os.unlink(tmp.name)
                 raise HTTPException(
                     status_code=413,
-                    detail=f"File exceeds {MAX_UPLOAD_BYTES // 1_000_000} MB limit",
+                    detail=f"File exceeds {MAX_UPLOAD_BYTES // 1_000_000_000} GB limit",
                 )
             tmp.write(chunk)
     finally:

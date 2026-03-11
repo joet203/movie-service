@@ -176,6 +176,17 @@ section:first-of-type{padding-top:100px}
 .filter-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle)}
 .filter-input::placeholder{color:var(--text-muted)}
 .filter-sep{width:1px;height:24px;background:var(--border);margin:0 4px}
+.genre-and-row{display:flex;align-items:flex-start;gap:10px;flex-basis:100%;padding-top:2px}
+.genre-and-label{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding-top:7px;white-space:nowrap}
+.genre-and-select{font-family:var(--font-body);font-size:.8rem;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-warm);color:var(--text);min-width:250px;min-height:86px;outline:none}
+.genre-and-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle)}
+.genre-and-hint{font-size:.75rem;color:var(--text-muted);padding-top:8px}
+@media(max-width:720px){
+  .genre-and-row{flex-direction:column;align-items:stretch}
+  .genre-and-label{padding-top:0}
+  .genre-and-select{width:100%;min-width:0}
+  .genre-and-hint{padding-top:0}
+}
 
 .results-info{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;min-height:28px}
 .results-count{font-size:.82rem;color:var(--text-secondary)}
@@ -343,7 +354,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
     Swagger API Docs</a></div>
   <div class="hero-stats">
-    <div class="hero-stat"><div class="val" id="statRows">&mdash;</div><div class="label">Movies Loaded</div></div>
+    <div class="hero-stat"><div class="val" id="statRows">&mdash;</div><div class="label">Rows in DB</div></div>
     <div class="hero-stat"><div class="val">0.52s</div><div class="label">Ingest Time</div></div>
     <div class="hero-stat"><div class="val">0.03s</div><div class="label">Query Speed</div></div>
     <div class="hero-stat"><div class="val">2</div><div class="label">Dependencies</div></div>
@@ -422,7 +433,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
   <div class="section-head fade-in">
     <span class="section-tag">Explore</span>
     <h2>Browse &amp; Search Movies</h2>
-    <p>Filter by year range and genre. Results are paginated with server-side LIMIT/OFFSET.</p>
+    <p>Filter by year range, genre, or match-all genres (AND). Results are paginated with server-side LIMIT/OFFSET.</p>
   </div>
 
   <form id="searchForm" onsubmit="searchMovies(event)">
@@ -447,6 +458,22 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
         <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text-muted);cursor:pointer;white-space:nowrap" title="Use async query with SSE progress tracking">
           <input type="checkbox" id="asyncToggle"> Async (SSE)
         </label>
+      </div>
+      <div class="genre-and-row">
+        <label class="genre-and-label" for="genresAllSelect">Match All Genres (AND)</label>
+        <select id="genresAllSelect" class="genre-and-select" multiple size="4">
+          <option value="Action">Action</option>
+          <option value="Comedy">Comedy</option>
+          <option value="Crime">Crime</option>
+          <option value="Drama">Drama</option>
+          <option value="History">History</option>
+          <option value="Horror">Horror</option>
+          <option value="Mystery">Mystery</option>
+          <option value="Romance">Romance</option>
+          <option value="Sci-Fi">Sci-Fi</option>
+          <option value="Thriller">Thriller</option>
+        </select>
+        <span class="genre-and-hint">Cmd/Ctrl-click to select multiple genres.</span>
       </div>
     </div>
   </form>
@@ -666,6 +693,7 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
           <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>CI/CD with automated testing</li>
           <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>OpenTelemetry instrumentation</li>
           <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Restrict CORS to specific origins</li>
+          <li><span class="check-icon check-future"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/></svg></span>Optional data quality mode (dedupe rows + normalize title punctuation/spacing)</li>
         </ul>
       </div>
     </div>
@@ -677,13 +705,18 @@ footer{margin-top:80px;padding:28px 0;border-top:1px solid var(--border-light);t
   <div class="section-head fade-in">
     <span class="section-tag">Reference</span>
     <h2>Documentation</h2>
-    <p>Design rationale, interview prep, and implementation plan.</p>
+    <p>Run instructions, design rationale, interview prep, and implementation plan.</p>
   </div>
   <div class="doc-grid fade-in fade-in-d1">
     <a class="doc-card" href="/docs" target="_blank">
       <div class="doc-icon">&#x1f4d6;</div>
       <h4>Swagger UI</h4>
       <p>Interactive API documentation with try-it-out</p>
+    </a>
+    <a class="doc-card" href="/readme" target="_blank">
+      <div class="doc-icon">&#x1f4dd;</div>
+      <h4>README</h4>
+      <p>Build/run steps and endpoint overview</p>
     </a>
     <a class="doc-card" href="/design" target="_blank">
       <div class="doc-icon">&#x1f4c1;</div>
@@ -746,15 +779,27 @@ setInterval(checkHealth, 60000);
 
 // ── Row count ──
 async function updateRowCount() {
+  const stat = document.getElementById('statRows');
   try {
     const r = await fetch(`${API}/movies?limit=1`);
-    if (r.ok) {
-      const d = await r.json();
-      // Try a count query by getting all with high limit... or just show dash
-      // We'll do a filtered query with very high limit to approximate
+    if (r.status === 202) {
+      stat.textContent = '…';
+      return;
     }
-  } catch {}
+    if (!r.ok) throw new Error('Failed to fetch row count');
+    const totalHeader = r.headers.get('X-Total-Count');
+    if (totalHeader !== null) {
+      const total = parseInt(totalHeader, 10);
+      stat.textContent = Number.isNaN(total) ? '\u2014' : total.toLocaleString();
+      return;
+    }
+    const rows = await r.json();
+    stat.textContent = Array.isArray(rows) ? rows.length.toLocaleString() : '\u2014';
+  } catch {
+    stat.textContent = '\u2014';
+  }
 }
+updateRowCount();
 
 // ── Nav scroll ──
 window.addEventListener('scroll', () => {
@@ -814,7 +859,7 @@ async function handleFile(file) {
         tag.className = 'tag tag-completed'; tag.textContent = 'Completed';
         fill.classList.add('complete'); es.close();
         showToast('Dataset ingested successfully', 'success');
-        document.getElementById('statRows').textContent = 'Reload to update';
+        updateRowCount();
       }
       if (d.status === 'error') {
         tag.className = 'tag tag-error'; tag.textContent = 'Error';
@@ -842,11 +887,15 @@ async function searchMovies(e) {
 function buildQueryParams() {
   const params = applyDebugDelay(new URLSearchParams());
   const g = document.getElementById('genreInput').value.trim();
+  const selectedGenresAll = Array.from(
+    document.getElementById('genresAllSelect').selectedOptions
+  ).map((option) => option.value.trim()).filter(Boolean);
   const sy = document.getElementById('startYear').value;
   const ey = document.getElementById('endYear').value;
   const sb = document.getElementById('sortBy').value;
   const so = document.getElementById('sortOrder').value;
   if (g) params.set('genre', g);
+  if (selectedGenresAll.length) params.set('genres_all', selectedGenresAll.join(','));
   if (sy) params.set('start_year', sy);
   if (ey) params.set('end_year', ey);
   params.set('sort_by', sb);

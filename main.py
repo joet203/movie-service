@@ -12,6 +12,7 @@ PROJECT_DIR = Path(__file__).parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
 SAMPLE_CSV = PROJECT_DIR / "movies.csv"
 LARGE_CSV = FRONTEND_DIR / "movies_large.csv"
+README_MD = PROJECT_DIR / "README.md"
 
 
 @asynccontextmanager
@@ -57,6 +58,15 @@ async def serve_interview():
 @app.get("/plan")
 async def serve_plan():
     return FileResponse(FRONTEND_DIR / "plan.html")
+
+
+@app.get("/readme")
+async def serve_readme():
+    return FileResponse(
+        README_MD,
+        media_type="text/markdown",
+        filename="README.md",
+    )
 
 
 @app.get("/sample-data")

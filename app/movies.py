@@ -67,6 +67,22 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _parse_genres_all(raw: str | None) -> list[str]:
+    """Parse comma-separated genres for AND-style filtering."""
+    if raw is None:
+        return []
+
+    parsed: list[str] = []
+    seen: set[str] = set()
+    for token in raw.split(","):
+        normalized = token.strip().lower().replace(" ", "")
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        parsed.append(normalized)
+    return parsed
+
+
 def _normalize_sort_by(sort_by: str) -> str:
     return sort_by if sort_by in VALID_SORT_COLUMNS else "movie_name"
 
@@ -143,6 +159,7 @@ def _build_where_clause(
     start_year: int | None,
     end_year: int | None,
     genre: str | None,
+    genres_all: list[str] | None,
 ) -> tuple[str, list]:
     where = "WHERE 1=1"
     params: list = []
@@ -156,6 +173,11 @@ def _build_where_clause(
     if genre is not None:
         where += " AND genres ILIKE ? ESCAPE '\\'"
         params.append(f"%{_escape_like(genre)}%")
+    if genres_all:
+        normalized_genres_expr = "(',' || lower(replace(genres, ' ', '')) || ',')"
+        for genre_token in genres_all:
+            where += f" AND {normalized_genres_expr} LIKE ? ESCAPE '\\'"
+            params.append(f"%,{_escape_like(genre_token)},%")
 
     return where, params
 
@@ -198,6 +220,7 @@ def _execute_query(
     start_year: int | None,
     end_year: int | None,
     genre: str | None,
+    genres_all: list[str] | None,
     sort_by: str,
     sort_order: Literal["asc", "desc"],
     limit: int,
@@ -207,7 +230,7 @@ def _execute_query(
 ) -> dict:
     normalized_sort = _normalize_sort_by(sort_by)
     direction = "ASC" if sort_order == "asc" else "DESC"
-    where, params = _build_where_clause(start_year, end_year, genre)
+    where, params = _build_where_clause(start_year, end_year, genre, genres_all)
 
     conn = db.get_db()
     try:
@@ -245,6 +268,7 @@ def _run_query(
     start_year: int | None,
     end_year: int | None,
     genre: str | None,
+    genres_all: list[str] | None,
     sort_by: str,
     sort_order: Literal["asc", "desc"],
     limit: int,
@@ -260,6 +284,7 @@ def _run_query(
             start_year=start_year,
             end_year=end_year,
             genre=genre,
+            genres_all=genres_all,
             sort_by=sort_by,
             sort_order=sort_order,
             limit=limit,
@@ -519,6 +544,13 @@ async def query_movies(
     start_year: int | None = None,
     end_year: int | None = None,
     genre: str | None = None,
+    genres_all: str | None = Query(
+        default=None,
+        description=(
+            "Comma-separated list of genres. Rows must contain all genres (AND). "
+            "Example: Action,Crime"
+        ),
+    ),
     sort_by: str = Query(default="movie_name"),
     sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, ge=1),
@@ -527,6 +559,7 @@ async def query_movies(
 ) -> list[Movie] | TaskResponse:
     _validate_year_range(start_year, end_year)
     _validate_limit(limit)
+    genres_all_tokens = _parse_genres_all(genres_all)
     phase_delay_seconds = _debug_delay_seconds(debug_phase_delay_ms)
 
     # Run query in a worker thread and wait up to the threshold.
@@ -539,6 +572,7 @@ async def query_movies(
             start_year,
             end_year,
             genre,
+            genres_all_tokens,
             sort_by,
             sort_order,
             limit,
@@ -582,6 +616,13 @@ async def query_movies_async(
     start_year: int | None = Query(default=None),
     end_year: int | None = Query(default=None),
     genre: str | None = Query(default=None),
+    genres_all: str | None = Query(
+        default=None,
+        description=(
+            "Comma-separated list of genres. Rows must contain all genres (AND). "
+            "Example: Action,Crime"
+        ),
+    ),
     sort_by: str = Query(default="movie_name"),
     sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=DEFAULT_QUERY_LIMIT, ge=1),
@@ -592,6 +633,7 @@ async def query_movies_async(
     then GET /tasks/{id}/results for the data."""
     _validate_year_range(start_year, end_year)
     _validate_limit(limit)
+    genres_all_tokens = _parse_genres_all(genres_all)
     phase_delay_seconds = _debug_delay_seconds(debug_phase_delay_ms)
 
     task_id = _new_task_id()
@@ -601,6 +643,7 @@ async def query_movies_async(
         start_year,
         end_year,
         genre,
+        genres_all_tokens,
         sort_by,
         sort_order,
         limit,

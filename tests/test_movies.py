@@ -112,6 +112,24 @@ class TestQuery:
         for m in movies:
             assert "Action" in m["genres"]
 
+    def test_query_by_genres_all_and(self, client, populated_db):
+        resp = client.get("/movies", params={"genres_all": "Action,Crime"})
+        assert resp.status_code == 200
+        movies = resp.json()
+        assert len(movies) > 0
+        for m in movies:
+            assert "Action" in m["genres"]
+            assert "Crime" in m["genres"]
+
+    def test_query_by_genres_all_normalizes_input(self, client, populated_db):
+        resp = client.get("/movies", params={"genres_all": " action ,  crime "})
+        assert resp.status_code == 200
+        movies = resp.json()
+        assert len(movies) > 0
+        for m in movies:
+            assert "Action" in m["genres"]
+            assert "Crime" in m["genres"]
+
     def test_query_combined(self, client, populated_db):
         resp = client.get(
             "/movies", params={"start_year": 2020, "end_year": 2023, "genre": "Comedy"}
@@ -208,6 +226,20 @@ class TestAsyncQuery:
         for m in movies:
             assert "Action" in m["genres"]
         assert "X-Total-Count" in resp.headers
+
+    def test_async_query_genres_all_and(self, client, populated_db):
+        resp = client.post("/movies/query", params={"genres_all": "Crime,Drama"})
+        assert resp.status_code == 202
+        task_id = resp.json()["task_id"]
+        assert db.tasks[task_id]["status"] == "completed"
+
+        rr = client.get(f"/tasks/{task_id}/results")
+        assert rr.status_code == 200
+        rows = rr.json()
+        assert len(rows) > 0
+        for row in rows:
+            assert "Crime" in row["genres"]
+            assert "Drama" in row["genres"]
 
     def test_async_query_sse(self, client, populated_db):
         resp = client.post("/movies/query")

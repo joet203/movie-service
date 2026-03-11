@@ -85,6 +85,13 @@ Task progress is tracked in a plain Python dict with a lock:
 
 In production, this would be replaced with Redis or a database-backed solution for horizontal scaling and persistence across restarts.
 
+## Future Improvements
+
+- Optional data-quality mode during ingestion:
+  - Deduplicate repeated rows (exact-row hash or deterministic key strategy)
+  - Normalize movie title punctuation/whitespace for cleaner display/search
+  - Emit data-quality counters in task results (rows ingested, deduped, normalized, rejected)
+
 ---
 
 ## Benchmarks

@@ -108,6 +108,11 @@ uv run pytest tests/ -v
 - `MOVIES_MAX_QUERY_LIMIT`: maximum allowed `limit` for `/movies` and `/movies/query` (default: `50000`)
 - `MOVIES_TASK_POLL_INTERVAL_SECONDS`: SSE task polling interval for `/tasks/{id}/events` (default: `0.2`)
 
+### Persistence Note
+
+- The service uses an on-disk DuckDB file, so uploaded data persists across restarts by default.
+- For a clean demo state, use `make run` (it removes old DB files before starting), or manually delete `movies.duckdb` and `movies.duckdb.wal` before launch.
+
 ## Demo / Progress Simulation
 
 - Frontend includes a **Demo Settings** card (`Simulate Slow Operations` + `Phase Delay (ms)`).
@@ -123,7 +128,7 @@ uv run pytest tests/ -v
 1. **Start the server**: `make run`
 2. **Open the UI**: `http://localhost:8000`
 3. **Upload data**: Click the upload area or drag `movies.csv` onto it. A sample CSV download link is provided in the UI.
-4. **Query movies**: Use the search form to filter by year range and/or genre
+4. **Query movies**: Use the search form to filter by year range, single-genre text, and/or match-all genre selection (AND)
 5. **Download dataset**: Click the download button to export as gzipped CSV
 
 ### API Endpoints
@@ -148,6 +153,7 @@ uv run pytest tests/ -v
 | `start_year` | int | — | Filter movies from this year |
 | `end_year` | int | — | Filter movies up to this year |
 | `genre` | string | — | Case-insensitive genre substring match |
+| `genres_all` | string | — | Comma-separated genres; all listed genres must be present (AND). Example: `Action,Crime` |
 | `sort_by` | string | `movie_name` | Sort column (`movie_name`, `year`, `genres`, `rating`) |
 | `sort_order` | string | `asc` | Sort direction (`asc` or `desc`) |
 | `limit` | int | 10,000 | Results per page (max from `MOVIES_MAX_QUERY_LIMIT`, default `50,000`) |
@@ -164,8 +170,8 @@ curl -X POST -F "file=@movies.csv" http://localhost:8000/datasets
 # Poll progress (replace TASK_ID)
 curl -N http://localhost:8000/tasks/TASK_ID/events
 
-# Query (with sorting and pagination)
-curl -v "http://localhost:8000/movies?start_year=2020&end_year=2023&genre=Action&sort_by=rating&sort_order=desc&limit=50"
+# Query (with sorting, pagination, and match-all genres)
+curl -v "http://localhost:8000/movies?start_year=2020&end_year=2023&genres_all=Action,Crime&sort_by=rating&sort_order=desc&limit=50"
 
 # Async query (for large result sets — returns task ID, poll via SSE)
 curl -X POST "http://localhost:8000/movies/query?genre=Action"

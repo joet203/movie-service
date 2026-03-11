@@ -2,21 +2,27 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import logging
 import os
 import tempfile
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app import db
 from app.model import HealthResponse, Movie, TaskResponse, TaskStatus
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 EXPECTED_HEADERS = ["movie_name", "year", "genres", "rating"]
-CHUNK_SIZE = 1024 * 1024  # 1 MB for upload streaming
-DOWNLOAD_CHUNK = 65_536   # 64 KB for download streaming
+CHUNK_SIZE = 1024 * 1024          # 1 MB for upload streaming
+DOWNLOAD_CHUNK = 65_536            # 64 KB for download streaming
+MAX_UPLOAD_BYTES = 10_000_000_000  # 10 GB upload limit
+DEFAULT_QUERY_LIMIT = 1000
+MAX_QUERY_LIMIT = 10_000
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +44,17 @@ async def upload_dataset(
 ) -> TaskResponse:
     # Stream upload to a temp file — never hold full CSV in memory
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+    total_bytes = 0
     try:
         while chunk := await file.read(CHUNK_SIZE):
+            total_bytes += len(chunk)
+            if total_bytes > MAX_UPLOAD_BYTES:
+                tmp.close()
+                os.unlink(tmp.name)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File exceeds {MAX_UPLOAD_BYTES // 1_000_000_000} GB limit",
+                )
             tmp.write(chunk)
     finally:
         tmp.close()
@@ -74,6 +89,11 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
                     f"got {normalized}"
                 )
 
+        # Safety: temp paths from tempfile should never contain quotes,
+        # but assert to prevent SQL injection via path manipulation.
+        if "'" in temp_path:
+            raise ValueError("Invalid temp file path")
+
         # Step 2: DuckDB native CSV read — bypasses Python-side parsing entirely.
         # TRY_CAST gracefully handles dirty data (e.g., "III" in year column).
         # strict_mode=false tolerates quoting irregularities in the CSV.
@@ -107,8 +127,9 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
         task["status"] = "completed"
 
     except Exception as e:
+        logger.exception("Ingestion failed for task %s", task_id)
         task["status"] = "error"
-        task["error"] = str(e)
+        task["error"] = _sanitize_error(e)
         try:
             conn.execute("DROP TABLE IF EXISTS movies_staging")
         except Exception:
@@ -118,6 +139,14 @@ def _ingest_csv(task_id: str, temp_path: str) -> None:
             os.unlink(temp_path)
         except OSError:
             pass
+
+
+def _sanitize_error(e: Exception) -> str:
+    """Return a safe error message — expose CSV format issues, hide internals."""
+    msg = str(e)
+    if "header" in msg.lower() or "csv" in msg.lower() or "empty" in msg.lower():
+        return msg
+    return "Ingestion failed — check CSV format and try again"
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +190,18 @@ async def _event_generator(task_id: str):
 # Query
 # ---------------------------------------------------------------------------
 
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcards in user input."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/movies")
 async def query_movies(
     start_year: int | None = None,
     end_year: int | None = None,
     genre: str | None = None,
+    limit: int = Query(default=DEFAULT_QUERY_LIMIT, le=MAX_QUERY_LIMIT, ge=1),
+    offset: int = Query(default=0, ge=0),
 ) -> list[Movie]:
     if start_year is not None and end_year is not None and start_year > end_year:
         raise HTTPException(
@@ -184,8 +220,11 @@ async def query_movies(
         sql += " AND year <= ?"
         params.append(end_year)
     if genre is not None:
-        sql += " AND genres LIKE ?"
-        params.append(f"%{genre}%")
+        sql += " AND genres LIKE ? ESCAPE '\\'"
+        params.append(f"%{_escape_like(genre)}%")
+
+    sql += " LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
 
     result = conn.execute(sql, params)
     columns = [desc[0] for desc in result.description]

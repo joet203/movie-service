@@ -1,101 +1,73 @@
 # Design Choices
 
-## Overview
+## Objectives
 
-Uploads are streamed to disk in chunks to avoid buffering the full file in application memory. Querying and storage are handled with DuckDB because it supports efficient analytical filtering on columnar data and can operate out-of-core on datasets larger than available RAM.
+- Meet the required API surface with clear behavior.
+- Handle datasets larger than memory.
+- Keep CPU/memory usage predictable for long-running operations.
+- Keep implementation readable and dependency-light.
 
-Long-running ingestion is decoupled from the request/response cycle using background task execution plus in-memory task status tracking. The endpoint returns `202 Accepted` immediately with a task ID. Progress updates are exposed via Server-Sent Events (SSE).
+## Core Decisions
 
-Data replacement uses a staging table pattern — new data is ingested into `movies_staging`, then atomically swapped into `movies` via a transaction. This ensures queries always see a complete dataset, never partial ingestion state.
+## 1) DuckDB for storage and analytics
 
-Large downloads are returned with `StreamingResponse` over a DuckDB-generated gzip file, so the response is streamed incrementally in 64 KB chunks rather than materialized in memory.
+DuckDB is used as an embedded analytical database because it is strong at large scans/filtering and supports out-of-core execution. This is a good fit for CSV ingest, filtered movie queries, and whole-table export.
 
-For this take-home, in-process task state (a Python dict) was chosen for simplicity. In production, job execution and status state would be externalized (e.g., Redis, a task queue) to support horizontal scaling and persistence across restarts.
+Key benefits used in this project:
 
----
+- Native CSV ingestion via `read_csv(...)`
+- ACID transactions for atomic table swap
+- Native gzip CSV export via `COPY ... COMPRESSION 'gzip'`
 
-## Why DuckDB?
+## 2) Atomic ingestion with staging table
 
-DuckDB is an embedded OLAP (Online Analytical Processing) database that runs in-process — no separate server needed. Unlike transactional databases (PostgreSQL, MySQL) which are optimized for many small reads and writes, OLAP engines are designed for scanning and filtering large volumes of data efficiently.
+Uploads are written to a temp CSV on disk, validated, then ingested into `movies_staging`. On success:
 
-- **Out-of-core processing**: Automatically spills to disk when data exceeds available RAM. Handles datasets far larger than memory without any configuration.
-- **Columnar storage**: Analytical queries (filters, scans) are inherently faster with columnar layout. DuckDB pushes filter predicates down to the scan layer.
-- **ACID transactions**: Enables the atomic staging table swap during ingestion — queries never see partial data.
-- **Native gzip export**: `COPY ... TO ... COMPRESSION 'gzip'` handles CSV formatting and compression in a single C++ pass.
+1. `DROP TABLE IF EXISTS movies`
+2. `ALTER TABLE movies_staging RENAME TO movies`
 
-## Ingestion: DuckDB Native CSV Reader
+inside a transaction. This prevents partially loaded datasets from becoming visible.
 
-CSV ingestion uses DuckDB's built-in `read_csv` function rather than Python-side parsing. This was an intentional optimization — an initial implementation using Python's `csv.reader` with `executemany` batching took **92 seconds** for the 367K-row dataset. Switching to DuckDB's native C++ CSV reader reduced this to **0.5 seconds** (170x faster).
+## 3) Progress model for long requests (>2s)
 
-- `TRY_CAST` handles dirty data gracefully (e.g., `"III"` in the year column becomes `NULL` instead of failing)
-- `strict_mode=false` tolerates quoting irregularities in the CSV
-- Header validation is still performed via a quick `csv.reader` first-line check before DuckDB ingests
-- The staging table pattern is preserved for atomic replacement
+A shared task model is used for upload, query, and export:
 
-The Python `csv.reader` is still used for header validation — stdlib for correctness, DuckDB for performance.
+- task created with `task_id`
+- status transitions: `pending -> processing -> completed/error`
+- phase-based progress percentages (deterministic milestones)
+- real-time events streamed with SSE (`/tasks/{task_id}/events`)
 
-## Memory Management
+For synchronous UX:
 
-Every operation avoids loading full datasets into memory:
+- `GET /movies` and `GET /datasets/download` attempt fast completion.
+- If work exceeds the 2-second threshold, endpoint returns `202` + `task_id`.
+- Client follows with SSE and fetches final result/artifact from task endpoints.
 
-- **Upload**: `UploadFile` streamed to a temp file in 1 MB chunks.
-- **Ingestion**: DuckDB reads the CSV directly from disk in its C++ engine. No Python-side row iteration.
-- **Query**: DuckDB pushes `WHERE` filters to the scan layer. Only matching rows are materialized.
-- **Download**: DuckDB writes a gzip-compressed CSV to a temp file natively. The file is streamed to the client in 64 KB chunks, then deleted.
+This avoids guessing runtime up front while satisfying the requirement for long-running request progress.
 
-## Background Tasks + SSE
+## 4) Thread-safe task registry with bounded growth
 
-CSV ingestion runs as a `BackgroundTasks` function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free. The SSE endpoint polls task state and emits events when status changes.
+Task state is stored in-process (dict + lock) for simplicity in a single-process service. To prevent unbounded memory growth:
 
-## Atomic Data Replacement
+- completed/error tasks are pruned by TTL
+- registry is capped by max task count
+- export artifacts are deleted when tasks are consumed/pruned/shutdown
 
-Each upload replaces the entire dataset atomically using a staging table:
+## 5) Per-operation DB connections
 
-1. Ingest into `movies_staging`
-2. `BEGIN TRANSACTION; DROP TABLE IF EXISTS movies; ALTER TABLE movies_staging RENAME TO movies; COMMIT;`
+The app stores a DB path, not a shared connection object. Each operation opens/closes its own DuckDB connection. This avoids shared-connection concurrency hazards and keeps behavior easier to reason about under parallel requests.
 
-Queries always see either the complete old dataset or the complete new one. If ingestion fails, the staging table is dropped and the original `movies` table is preserved.
+## 6) Memory behavior
 
-## SSE over WebSockets
+- Upload: streamed to disk in chunks (no full file buffering)
+- Ingestion: DuckDB reads CSV from file
+- Download: gzip artifact streamed in chunks
+- Query: paginated with `limit/offset`, with `X-Total-Count` for pagination UI
 
-Server-Sent Events was chosen over WebSockets because progress reporting is unidirectional (server to client). SSE uses standard HTTP with no upgrade handshake, and has native browser support via the `EventSource` API.
+## Trade-offs
 
-## Year vs Date Range
+- Task state is in-memory and process-local (not distributed/persistent across restarts).
+- Progress is phase-based, not exact SQL execution percentage.
+- Export in task mode writes a temporary gzip artifact before download.
 
-The CSV data only contains a `year` column, not a full date. The query API uses `start_year`/`end_year` as an honest interpretation of the "date range" requirement.
-
-## Genre Filtering: LIKE vs Normalization
-
-Genres are stored as a single comma-separated string rather than normalized into a junction table:
-
-- DuckDB is an OLAP engine where denormalized data is idiomatic
-- `LIKE '%Action%'` is pushed down to DuckDB's scan layer and is efficient on columnar data
-- A junction table would add join complexity with no performance benefit
-- Trade-off: substring matching could theoretically produce false positives (e.g., "Drama" matching "Melodrama"), but the dataset's genre vocabulary doesn't contain such conflicts
-
-## Task State: In-Memory Dict
-
-Task progress is tracked in a plain Python dict:
-
-- Single-process FastAPI — no cross-process state needed
-- Dict mutations are GIL-safe between the background thread and SSE generator
-- Task state is ephemeral by nature
-
-In production, this would be replaced with Redis or a database-backed solution for horizontal scaling and persistence across restarts.
-
----
-
-## Benchmarks
-
-Measured on Apple M1, 367,314-row CSV (15.8 MB), Python 3.13, DuckDB 1.3:
-
-| Operation | Time | Notes |
-|---|---|---|
-| Upload + Ingest | 0.52s | DuckDB native `read_csv` with atomic staging swap |
-| Query (filtered) | 0.03s | 8,377 Action movies, 2020–2023 |
-| Query (all rows) | 0.83s | 367,314 rows serialized to JSON |
-| Download (gzip) | 0.49s | 4.9 MB gzipped CSV via `StreamingResponse` |
-
-Server RSS: ~85 MB idle → ~288 MB after all operations (DuckDB buffer pool + query materialization).
-
-Run benchmarks: `uv run python benchmark.py movies.csv` (requires server running on port 8000).
+These are acceptable for an assessment implementation and keep the service focused and understandable.

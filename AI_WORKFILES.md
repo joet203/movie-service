@@ -7,8 +7,8 @@ This submission includes the AI-assisted work artifacts used during development.
 - `requirements.md` — original assignment requirements
 - `plan.md` and `plan.html` — implementation planning artifacts
 - `DESIGN.md` — architecture/design rationale
-- `INTERVIEW.md` — implementation discussion notes
-- `CLAUDE.md` and `.claude/` — Claude-related local workfiles/settings
+- `CLAUDE.md` and `AGENTS.md` — project agent instructions/context
+- `.claude/settings.local.json` — local Claude Code permission profile used during development
 
 ## Notes
 

@@ -47,6 +47,8 @@ Every operation avoids loading full datasets into memory:
 
 CSV ingestion runs as a `BackgroundTasks` function. Starlette runs synchronous background tasks in a thread pool, keeping the event loop free. The SSE endpoint polls task state and emits events when status changes.
 
+SSE is used for ingestion because it's the only operation that can exceed the 2-second threshold on large files. Queries are bounded by the 10K row pagination limit (0.03–0.83s even for the full dataset). Downloads stream natively via chunked HTTP response — the client receives data incrementally as DuckDB writes it, so the streaming itself serves as progress. If queries or downloads ever became long-running (e.g., unbounded result sets or multi-GB exports), the same SSE pattern could be applied by wrapping them in a background task.
+
 ## Atomic Data Replacement
 
 Each upload replaces the entire dataset atomically using a staging table:

@@ -108,6 +108,12 @@ def _prune_tasks() -> None:
         _cleanup_task_artifacts(task)
 
 
+def cleanup_all_task_artifacts() -> None:
+    """Best-effort cleanup for any task-owned temp files (called at shutdown)."""
+    for task in list(db.tasks.values()):
+        _cleanup_task_artifacts(task)
+
+
 def _execute_query(
     start_year: int | None,
     end_year: int | None,

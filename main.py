@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import db
+from app import movies as movies_module
 from app.movies import router as movies_router
 
 
@@ -11,6 +12,7 @@ from app.movies import router as movies_router
 async def lifespan(app: FastAPI):
     db.init_db()
     yield
+    movies_module.cleanup_all_task_artifacts()
     db.close_db()
 
 

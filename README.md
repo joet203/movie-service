@@ -73,9 +73,6 @@ uv sync
 
 # Start the server (cleans up old DB files automatically)
 make run
-
-# Or use a custom port if 8000 is taken
-make run PORT=8001
 ```
 
 Open `http://localhost:8000` for the frontend UI, or `http://localhost:8000/docs` for Swagger.

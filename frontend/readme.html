@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Run Guide - Movie Database Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --accent:#1863DC;
+  --accent-subtle:rgba(24,99,220,0.08);
+  --bg:#ffffff;
+  --surface:#ffffff;
+  --bg-section:#f5f6f8;
+  --border:#e5e7eb;
+  --border-light:#f0f1f3;
+  --text:#111827;
+  --text-secondary:#6b7280;
+  --text-muted:#9ca3af;
+  --radius:10px;
+  --radius-lg:14px;
+  --shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --font-display:'Newsreader',Georgia,serif;
+  --font-body:'Outfit',system-ui,sans-serif;
+}
+[data-theme="dark"]{
+  --accent:#4d94ff;
+  --accent-subtle:rgba(77,148,255,0.08);
+  --bg:#111318;
+  --surface:#1e2028;
+  --bg-section:#1a1d24;
+  --border:#2e3140;
+  --border-light:#252833;
+  --text:#e8eaf0;
+  --text-secondary:#9ba3b5;
+  --text-muted:#6b7280;
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border-light)}
+.nav-inner{max-width:880px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.nav-left{display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.brand{font-family:var(--font-display);font-size:1.1rem}
+.nav-links{display:flex;align-items:center;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;text-decoration:none;font-size:.82rem;border:1px solid var(--border);color:var(--text-secondary);background:var(--surface)}
+.btn:hover{color:var(--text);border-color:var(--text-muted)}
+.shell{max-width:880px;margin:0 auto;padding:28px 20px 48px}
+h1{font-family:var(--font-display);font-size:2.2rem;font-weight:400;letter-spacing:-0.02em;line-height:1.2}
+h2{font-family:var(--font-display);font-size:1.35rem;font-weight:500;margin-top:30px;margin-bottom:10px}
+p{font-size:.95rem;color:var(--text-secondary)}
+.lede{margin-top:10px;max-width:660px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-top:14px;box-shadow:var(--shadow)}
+pre{background:var(--bg-section);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;overflow-x:auto;font-size:.82rem;line-height:1.55}
+code{font-family:'SF Mono',Monaco,Consolas,monospace}
+table{width:100%;border-collapse:collapse;font-size:.86rem;margin-top:8px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--border-light);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600}
+ul{list-style:none;margin-top:6px}
+li{padding:4px 0;color:var(--text-secondary);font-size:.9rem}
+li::before{content:'- ';color:var(--accent)}
+.note{font-size:.84rem;color:var(--text-muted);margin-top:6px}
+.theme-toggle{background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:5px 8px;color:var(--text-muted);display:flex;align-items:center}
+.theme-toggle:hover{color:var(--text);border-color:var(--text-muted)}
+.theme-toggle svg{width:16px;height:16px}
+.theme-toggle .icon-moon,.theme-toggle .icon-sun{display:none}
+[data-theme="light"] .theme-toggle .icon-moon{display:block}
+[data-theme="dark"] .theme-toggle .icon-sun{display:block}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <div class="nav-left">
+      <span class="dot"></span>
+      <span class="brand">Movie DB Run Guide</span>
+    </div>
+    <div class="nav-links">
+      <a class="btn" href="/">Back to Dashboard</a>
+      <a class="btn" href="/docs" target="_blank" rel="noopener noreferrer">Swagger</a>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<div class="shell">
+  <h1>Build and Run</h1>
+  <p class="lede">Quick reviewer guide for running the service and testing the required flows. For detailed rationale, open <a href="/design" style="color:var(--accent);text-decoration:none">Design Choices</a>.</p>
+
+  <h2>Quick Start</h2>
+  <div class="card">
+<pre><code>uv sync
+make run
+</code></pre>
+    <p class="note">UI: <code>http://localhost:8000/</code> | API docs: <code>http://localhost:8000/docs</code></p>
+  </div>
+
+  <h2>Core Endpoints</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>POST</code></td><td><code>/datasets</code></td><td>Upload CSV and start ingestion task</td></tr>
+        <tr><td><code>GET</code></td><td><code>/movies</code></td><td>Query by year range/genre (auto-task handoff if slow)</td></tr>
+        <tr><td><code>POST</code></td><td><code>/movies/query</code></td><td>Always async query endpoint</td></tr>
+        <tr><td><code>GET</code></td><td><code>/datasets/download</code></td><td>Download gzip export (auto-task handoff if slow)</td></tr>
+        <tr><td><code>GET</code></td><td><code>/tasks/{id}/events</code></td><td>SSE progress stream</td></tr>
+        <tr><td><code>GET</code></td><td><code>/tasks/{id}/results</code></td><td>Fetch completed async query rows</td></tr>
+        <tr><td><code>GET</code></td><td><code>/tasks/{id}/download</code></td><td>Fetch completed async export artifact</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Query Filters</h2>
+  <div class="card">
+    <ul>
+      <li><code>start_year</code> and <code>end_year</code> for year range</li>
+      <li><code>genre</code> for substring filter</li>
+      <li><code>genres_all</code> for match-all genres (AND), e.g. <code>Action,Crime</code></li>
+      <li><code>sort_by</code>, <code>sort_order</code>, <code>limit</code>, <code>offset</code></li>
+    </ul>
+  </div>
+
+  <h2>Demo Tips</h2>
+  <div class="card">
+    <ul>
+      <li>Use the Dashboard "Demo Settings" to force longer operations and observe SSE progress.</li>
+      <li>Data persists in <code>movies.duckdb</code> across restarts by default.</li>
+      <li>Use <code>make run</code> for a clean start (removes old DB files first).</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function getPreferredTheme() {
+  const stored = localStorage.getItem('theme');
+  if (stored) return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+applyTheme(getPreferredTheme());
+</script>
+</body>
+</html>
